@@ -310,6 +310,11 @@ async function start() {
   const url = new URL(location.href);
   url.searchParams.set("family", state.code);
   history.replaceState(null, "", url);
+
+  // Large title collapses into the navigation bar as you scroll, like iOS
+  new IntersectionObserver(([e]) => $("#navbar").classList.toggle("scrolled", !e.isIntersecting), {
+    rootMargin: `-${$("#navbar").offsetHeight}px 0px 0px 0px`,
+  }).observe($("#view-title"));
   render();
 
   try {
@@ -365,7 +370,9 @@ const openCount = (type) => state.items.filter((i) => i.type === type && !i.done
 function render({ full = false } = {}) {
   const hour = new Date().getHours();
   $("#greeting").textContent = `${hour < 12 ? "Good morning" : hour < 18 ? "Good afternoon" : "Good evening"}, ${state.name}`;
-  $("#view-title").textContent = state.view === "home" ? "Our Home" : TYPES[state.view].title;
+  const title = state.view === "home" ? "Our Home" : TYPES[state.view].title;
+  $("#view-title").textContent = title;
+  $("#nav-title").textContent = title;
   document.querySelectorAll("#tabbar button").forEach((b) => {
     const v = b.dataset.view;
     if (v === state.view) b.setAttribute("aria-current", "page");
@@ -532,10 +539,27 @@ function chipGroup(label, options, current, onPick, extraClass = "") {
     }, o.icon ? icon(o.icon) : null, o.label)));
 }
 
+// iOS segmented control: a sliding thumb behind 2–5 equal segments
+function segmented(label, options, current, onPick) {
+  const index = Math.max(0, options.findIndex((o) => o.value === current));
+  return h("div", { class: "segmented", role: "group", "aria-label": label, style: `--count:${options.length};--index:${index}` },
+    h("span", { class: "thumb", "aria-hidden": "true" }),
+    options.map((o, i) => h("button", {
+      type: "button", "aria-pressed": i === index ? "true" : "false",
+      onclick: (e) => {
+        if (i === index) return;
+        haptic();
+        // Slide the thumb first, then let the caller re-render
+        e.currentTarget.parentElement.style.setProperty("--index", i);
+        setTimeout(() => onPick(o.value), reduceMotion.matches ? 0 : 160);
+      },
+    }, o.icon ? icon(o.icon) : null, o.label)));
+}
+
 function whoOptions() {
   const partner = partnerName();
   return [
-    { value: "", label: "Either of us" },
+    { value: "", label: "Either" },
     { value: state.name, label: "Me" },
     partner && { value: partner, label: partner },
   ].filter(Boolean);
@@ -547,9 +571,9 @@ function composer(type, onHome) {
   const rerender = () => { const y = scrollY; render({ full: true }); scrollTo(0, y); };
 
   if (onHome) {
-    form.append(h("div", { class: "type-switch" }, chipGroup("What to add",
-      Object.entries(TYPES).map(([value, t]) => ({ value, label: t.short, icon: t.icon })),
-      type, (v) => { state.quickType = v; rerender(); }, "scroll")));
+    form.append(segmented("What to add",
+      Object.entries(TYPES).map(([value, t]) => ({ value, label: t.short })),
+      type, (v) => { state.quickType = v; rerender(); }));
   }
 
   const inputAttrs = {
@@ -590,7 +614,7 @@ function composer(type, onHome) {
   if (type === "task") {
     form.append(h("div", { class: "composer-extra" },
       h("p", { class: "label" }, "Who's doing it"),
-      chipGroup("Who's doing it", whoOptions(), state.who, (v) => { state.who = v; rerender(); })));
+      segmented("Who's doing it", whoOptions(), state.who, (v) => { state.who = v; rerender(); })));
   }
 
   form.addEventListener("submit", (e) => {
@@ -718,16 +742,17 @@ function homeContent() {
   const recent = [...state.items].sort((a, b) => b.createdAt - a.createdAt).slice(0, 6);
   const partner = partnerName();
 
-  const stat = (type, label) => h("button", { class: "stat", onclick: () => go(type) },
+  // Smart-list tiles, as in the Reminders app: coloured icon, count, name
+  const stat = (type, label) => h("button", { class: "stat", "data-type": type, "aria-label": `${label}: ${openCount(type)}`, onclick: () => go(type) },
     h("span", { class: "stat-icon" }, icon(TYPES[type].icon)),
-    h("b", { "data-count": openCount(type), "data-key": `stat-${type}` }, String(prevCounts[`stat-${type}`] ?? 0)),
-    h("span", {}, label));
+    h("b", { "data-count": openCount(type), "data-key": `stat-${type}`, "aria-hidden": "true" }, String(prevCounts[`stat-${type}`] ?? 0)),
+    h("span", { class: "stat-label", "aria-hidden": "true" }, label));
   const section = (title, action) => h("div", { class: "section-title" }, h("span", {}, title),
     action && h("button", { class: "link-btn", onclick: action.run }, action.label));
   const quiet = (text) => h("div", { class: "empty compact" }, text);
 
   return [
-    h("div", { class: "stats" }, stat("task", "Tasks"), stat("reminder", "Reminders"), stat("grocery", "To buy")),
+    h("div", { class: "stats" }, stat("task", "Tasks"), stat("reminder", "Reminders"), stat("grocery", "To Buy"), stat("note", "Notes")),
 
     !partner && section("Invite your partner"),
     !partner && h("div", { class: "empty compact" },
@@ -849,7 +874,7 @@ setupSheet($("#settings"));
 
 let editing = null, editWho = "";
 function renderEditWho() {
-  $("#edit-who").replaceChildren(...chipGroup("Who's doing it", whoOptions(), editWho, (v) => { editWho = v; renderEditWho(); }).children);
+  $("#edit-who").replaceChildren(segmented("Who's doing it", whoOptions(), editWho, (v) => { editWho = v; renderEditWho(); }));
 }
 // One-tap "push it later" for reminders. Fills the date field; Save keeps it.
 function renderSnooze(due) {
@@ -873,7 +898,9 @@ function renderSnooze(due) {
 
 function openEdit(item) {
   editing = item;
-  $("#edit-title").textContent = `Edit ${TYPES[item.type].one}`;
+  const noun = TYPES[item.type].one.replace(/^./, (c) => c.toUpperCase());
+  $("#edit-title").textContent = `Edit ${noun}`;
+  $("#edit-delete").textContent = `Delete ${noun}`;
   $("#edit-text").value = item.text;
   $("#edit-due-wrap").hidden = item.type !== "reminder";
   $("#edit-due").value = toLocalInput(item.due);

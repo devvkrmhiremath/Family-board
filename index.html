@@ -5,8 +5,8 @@
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <title>Family Board</title>
   <meta name="description" content="Shared tasks, reminders, groceries and notes for the two of us.">
-  <meta name="theme-color" content="#fbf7f8" media="(prefers-color-scheme: light)">
-  <meta name="theme-color" content="#131115" media="(prefers-color-scheme: dark)">
+  <meta name="theme-color" content="#f2f2f7" media="(prefers-color-scheme: light)">
+  <meta name="theme-color" content="#000000" media="(prefers-color-scheme: dark)">
   <!-- iPhone "Add to Home Screen" support -->
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="mobile-web-app-capable" content="yes">
@@ -19,129 +19,150 @@
   <link rel="stylesheet" href="styles.css">
 </head>
 <body>
-  <!-- First-run screen -->
+  <!-- Welcome screen (iOS onboarding pattern: icon, title, three features, one button) -->
   <section id="setup" class="setup" hidden>
     <div class="setup-card">
       <div class="setup-hero">
         <img src="icons/icon-192.png" alt="" class="setup-logo" width="88" height="88">
-        <h1>Family Board</h1>
-        <p class="muted">One shared place for tasks, reminders, groceries and notes.</p>
+        <h1>Welcome to<br>Family Board</h1>
       </div>
 
-      <div id="setup-noconfig" class="notice" hidden>
-        Almost there: add your Firebase settings to <code>config.js</code> (see the README) and reload.
-        <br>Or <a href="?demo">try the demo</a>, which saves on this device only.
+      <ul class="features">
+        <li>
+          <span class="feature-icon tint"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="m9 11 3 3 8-8"/><path d="M20 12v7a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h9"/></svg></span>
+          <div><strong>Shared lists</strong><p>Tasks, reminders, groceries and notes in one place.</p></div>
+        </li>
+        <li>
+          <span class="feature-icon indigo"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75"/></svg></span>
+          <div><strong>Always in sync</strong><p>Anything one of you adds shows up on the other phone in seconds.</p></div>
+        </li>
+        <li>
+          <span class="feature-icon green"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12.5 10 17 19 7"/></svg></span>
+          <div><strong>Who did what</strong><p>See who added each thing and who ticked it off.</p></div>
+        </li>
+      </ul>
+
+      <div id="setup-noconfig" class="tip" hidden>
+        <p>Almost there: add your Firebase settings to <code>config.js</code> (see the README) and reload. Or <a href="?demo">try the demo</a>, which saves on this device only.</p>
       </div>
 
       <form id="setup-form" hidden novalidate>
-        <div class="field">
-          <label for="setup-name">Your name</label>
-          <input id="setup-name" autocomplete="given-name" autocapitalize="words" enterkeyhint="go" maxlength="30" aria-describedby="setup-name-help">
-          <p class="helper" id="setup-name-help">Shown next to everything you add.</p>
+        <label class="group-header" for="setup-name">Your name</label>
+        <div class="group">
+          <input id="setup-name" class="cell-input" autocomplete="given-name" autocapitalize="words" enterkeyhint="go" maxlength="30" placeholder="Name" aria-describedby="setup-name-help">
         </div>
-        <div id="setup-join" class="notice small" hidden>You're joining your partner's board.</div>
-        <div class="field" id="setup-choose">
-          <label for="setup-code">Board code <span class="muted">(optional)</span></label>
-          <input id="setup-code" autocapitalize="off" autocorrect="off" spellcheck="false" enterkeyhint="go" aria-describedby="setup-code-help">
-          <p class="helper" id="setup-code-help">Leave empty to start a new board. To join your partner, paste their invite link or code.</p>
+        <p class="group-footer" id="setup-name-help">Shown next to everything you add.</p>
+
+        <p id="setup-join" class="group-footer join-note" hidden>You're joining your partner's board.</p>
+        <div id="setup-choose">
+          <label class="group-header" for="setup-code">Board code (optional)</label>
+          <div class="group">
+            <input id="setup-code" class="cell-input" autocapitalize="off" autocorrect="off" spellcheck="false" enterkeyhint="go" placeholder="Paste invite link or code" aria-describedby="setup-code-help">
+          </div>
+          <p class="group-footer" id="setup-code-help">Leave this empty to start a new board.</p>
         </div>
-        <p class="helper" id="setup-error" role="alert" style="color:var(--danger)"></p>
-        <button class="btn primary" type="submit">Get started</button>
+        <p class="field-error" id="setup-error" role="alert"></p>
+        <button class="btn primary large block" type="submit">Continue</button>
       </form>
     </div>
   </section>
 
   <div id="app" hidden>
-    <header class="topbar">
-      <div>
-        <p class="eyebrow" id="greeting">Hello</p>
-        <h1 id="view-title" tabindex="-1">Home</h1>
-      </div>
-      <div class="topbar-right">
-        <span id="offline" class="offline-pill" role="status" hidden>Offline</span>
-        <button id="open-settings" class="icon-btn" aria-label="Settings and invite">
-          <svg class="i" viewBox="0 0 24 24"><circle cx="12" cy="8" r="4"/><path d="M4 21a8 8 0 0 1 16 0"/></svg>
+    <!-- iOS navigation bar: transparent at rest, glass with a small centred title once the large title scrolls away -->
+    <header class="navbar" id="navbar">
+      <span class="nav-side"><span id="offline" class="offline-pill" role="status" hidden>Offline</span></span>
+      <span class="nav-title" id="nav-title" aria-hidden="true">Our Home</span>
+      <span class="nav-side right">
+        <button id="open-settings" class="icon-btn tint" aria-label="Settings and invite">
+          <svg class="i" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="10"/><circle cx="12" cy="10" r="3.2"/><path d="M6.2 18.4a7 7 0 0 1 11.6 0"/></svg>
         </button>
-      </div>
+      </span>
     </header>
+    <div class="large-title">
+      <p class="eyebrow" id="greeting">Hello</p>
+      <h1 id="view-title" tabindex="-1">Our Home</h1>
+    </div>
 
     <main id="main"></main>
 
+    <!-- Floating tab bar -->
     <nav class="tabbar" id="tabbar" aria-label="Sections">
-      <button data-view="home"><svg class="i" viewBox="0 0 24 24"><path d="M3 10.5 12 3l9 7.5V20a1 1 0 0 1-1 1h-5v-6H9v6H4a1 1 0 0 1-1-1z"/></svg><span>Home</span></button>
-      <button data-view="task"><svg class="i" viewBox="0 0 24 24"><path d="m9 11 3 3 8-8"/><path d="M20 12v7a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h9"/></svg><span>Tasks</span><b class="badge" data-badge="task" aria-hidden="true"></b></button>
-      <button data-view="reminder"><svg class="i" viewBox="0 0 24 24"><path d="M18 8a6 6 0 0 0-12 0c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.7 21a2 2 0 0 1-3.4 0"/></svg><span>Reminders</span><b class="badge" data-badge="reminder" aria-hidden="true"></b></button>
-      <button data-view="grocery"><svg class="i" viewBox="0 0 24 24"><circle cx="9" cy="20" r="1.5"/><circle cx="18" cy="20" r="1.5"/><path d="M2 3h3l2.7 12.4a2 2 0 0 0 2 1.6h8.6a2 2 0 0 0 2-1.6L22 7H6"/></svg><span>Groceries</span><b class="badge" data-badge="grocery" aria-hidden="true"></b></button>
-      <button data-view="note"><svg class="i" viewBox="0 0 24 24"><path d="M14 3H6a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9z"/><path d="M14 3v6h6M8 13h8M8 17h5"/></svg><span>Notes</span></button>
+      <div class="tabbar-inner">
+        <button data-view="home"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 10.5 12 3l9 7.5V20a1 1 0 0 1-1 1h-5v-6H9v6H4a1 1 0 0 1-1-1z"/></svg><span>Home</span></button>
+        <button data-view="task"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="m9 11 3 3 8-8"/><path d="M20 12v7a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h9"/></svg><span>Tasks</span><b class="badge" data-badge="task" aria-hidden="true"></b></button>
+        <button data-view="reminder"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M18 8a6 6 0 0 0-12 0c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.7 21a2 2 0 0 1-3.4 0"/></svg><span>Reminders</span><b class="badge" data-badge="reminder" aria-hidden="true"></b></button>
+        <button data-view="grocery"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><circle cx="9" cy="20" r="1.5"/><circle cx="18" cy="20" r="1.5"/><path d="M2 3h3l2.7 12.4a2 2 0 0 0 2 1.6h8.6a2 2 0 0 0 2-1.6L22 7H6"/></svg><span>Groceries</span><b class="badge" data-badge="grocery" aria-hidden="true"></b></button>
+        <button data-view="note"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M14 3H6a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9z"/><path d="M14 3v6h6M8 13h8M8 17h5"/></svg><span>Notes</span></button>
+      </div>
     </nav>
   </div>
 
-  <!-- Edit sheet -->
+  <!-- Edit sheet: Cancel / title / Save, grouped fields, destructive action last -->
   <dialog id="edit" class="sheet" aria-labelledby="edit-title">
-    <div class="sheet-grab" aria-hidden="true"></div>
     <form id="edit-form" novalidate>
-      <div class="sheet-head">
+      <div class="sheet-grab" aria-hidden="true"></div>
+      <header class="sheet-bar">
+        <button type="button" class="bar-btn" data-close>Cancel</button>
         <h2 id="edit-title" tabindex="-1" autofocus>Edit</h2>
-        <button type="button" class="icon-btn" data-close aria-label="Close">
-          <svg class="i" viewBox="0 0 24 24"><path d="M18 6 6 18M6 6l12 12"/></svg>
-        </button>
+        <button type="submit" class="bar-btn strong">Save</button>
+      </header>
+      <div class="group">
+        <textarea id="edit-text" class="cell-input" rows="3" maxlength="2000" aria-label="Text"></textarea>
       </div>
-      <div class="field">
-        <label for="edit-text">Text</label>
-        <textarea id="edit-text" rows="3" maxlength="2000"></textarea>
-      </div>
-      <div class="field" id="edit-due-wrap">
-        <label for="edit-due">When</label>
-        <input id="edit-due" type="datetime-local">
+      <p class="group-footer" id="edit-meta"></p>
+
+      <div id="edit-due-wrap">
+        <label class="group-header" for="edit-due">Date &amp; time</label>
+        <div class="group">
+          <input id="edit-due" class="cell-input" type="datetime-local">
+        </div>
         <div class="chips snooze" id="edit-snooze" role="group" aria-label="Quick snooze"></div>
       </div>
-      <div class="field" id="edit-who-wrap">
-        <span class="label" id="edit-who-label">Who's doing it</span>
-        <div class="chips" id="edit-who" role="group" aria-labelledby="edit-who-label"></div>
+
+      <div id="edit-who-wrap">
+        <p class="group-header" id="edit-who-label">Who's doing it</p>
+        <div id="edit-who"></div>
       </div>
-      <p class="small muted sheet-meta" id="edit-meta"></p>
-      <div class="sheet-actions">
-        <button type="button" class="btn danger" id="edit-delete">
-          <svg class="i" viewBox="0 0 24 24"><path d="M3 6h18M8 6V4h8v2M19 6l-1 14H6L5 6"/></svg>Delete
-        </button>
-        <button type="submit" class="btn primary">Save</button>
+
+      <div class="group">
+        <button type="button" class="cell-btn destructive" id="edit-delete">Delete</button>
       </div>
     </form>
   </dialog>
 
-  <!-- Settings sheet -->
+  <!-- Settings sheet: grouped list like iOS Settings -->
   <dialog id="settings" class="sheet" aria-labelledby="settings-title">
-    <div class="sheet-grab" aria-hidden="true"></div>
     <form id="settings-form" novalidate>
-      <div class="sheet-head">
+      <div class="sheet-grab" aria-hidden="true"></div>
+      <header class="sheet-bar">
+        <span class="bar-btn" aria-hidden="true"></span>
         <h2 id="settings-title" tabindex="-1" autofocus>Settings</h2>
-        <button type="button" class="icon-btn" data-close aria-label="Close">
-          <svg class="i" viewBox="0 0 24 24"><path d="M18 6 6 18M6 6l12 12"/></svg>
+        <button type="submit" class="bar-btn strong">Done</button>
+      </header>
+
+      <label class="group-header" for="settings-name">Your name</label>
+      <div class="group">
+        <input id="settings-name" class="cell-input" maxlength="30" autocomplete="given-name" autocapitalize="words">
+      </div>
+
+      <p class="group-header">Invite</p>
+      <div class="group">
+        <button type="button" class="cell-btn" id="share-invite">
+          <svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v13M7 8l5-5 5 5M5 13v6a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-6"/></svg>
+          Share Invite Link
         </button>
       </div>
-      <div class="invite">
-        <p><strong>Invite your partner</strong></p>
-        <ol>
-          <li>Send them the invite link.</li>
-          <li>They open it in <strong>Safari</strong> and type their name.</li>
-          <li>They tap Share → <strong>Add to Home Screen</strong>.</li>
-        </ol>
-        <button type="button" class="btn primary block" id="share-invite">
-          <svg class="i" viewBox="0 0 24 24"><path d="M12 3v13M7 8l5-5 5 5M5 13v6a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-6"/></svg>Share invite link
-        </button>
+      <p class="group-footer">Send the link to your partner. They open it in Safari, type their name, then tap Share and Add to Home Screen.</p>
+
+      <p class="group-header">Board code</p>
+      <div class="group">
+        <code id="settings-code" class="cell-value"></code>
       </div>
-      <div class="field">
-        <label for="settings-name">Your name</label>
-        <input id="settings-name" maxlength="30" autocomplete="given-name" autocapitalize="words">
+
+      <div class="group">
+        <button type="button" class="cell-btn destructive centered" id="leave-board">Leave Board on This iPhone</button>
       </div>
-      <div class="field">
-        <span class="label">Board code</span>
-        <code id="settings-code" class="muted"></code>
-      </div>
-      <button type="submit" class="btn primary block">Done</button>
-      <div class="danger-zone">
-        <button type="button" class="btn danger" id="leave-board">Leave this board on this phone</button>
-      </div>
+      <p class="group-footer">Your lists stay saved for your partner. You can rejoin with the invite link.</p>
     </form>
   </dialog>
 

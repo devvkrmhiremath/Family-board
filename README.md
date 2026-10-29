@@ -22,6 +22,10 @@ It runs in the browser and installs on the iPhone home screen like an app. There
 - Animations: confetti when you tick things off, a celebration when a list is finished, sliding tabs, count-up numbers. Light haptic taps on iOS 18+. All motion turns off with iPhone's Reduce Motion setting
 - Follows the iPhone's text size setting, big tap targets (44pt+), WCAG AA colour contrast, and Reduce Motion
 
+## Design
+The app follows Apple's Human Interface Guidelines so it feels at home on iPhone:
+iOS system colours with true-black dark mode, SF font and text styles that follow your Text Size setting, a large title that collapses into a glass navigation bar, inset grouped lists, a floating glass tab bar with red badges, segmented controls, Reminders-style tiles and check circles, swipe actions, and sheets with Cancel / Save. All text meets WCAG AA contrast and every control is at least 44 pt.
+
 ## One-time setup (~10 minutes)
 
 ### 1. Create the free database (Firebase)
