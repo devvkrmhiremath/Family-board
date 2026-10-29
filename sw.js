@@ -1,6 +1,6 @@
 // Caches the app shell so the home-screen app opens instantly and offline.
 // Bump VERSION when you change files so phones pick up the update.
-const VERSION = "fb-v5";
+const VERSION = "fb-v6";
 const SHELL = [
   "./", "index.html", "styles.css", "app.js", "config.js", "manifest.webmanifest",
   "icons/icon-192.png", "icons/icon-512.png", "icons/apple-touch-icon.png",

@@ -367,9 +367,14 @@ function itemsOf(type) {
 }
 const openCount = (type) => state.items.filter((i) => i.type === type && !i.done).length;
 
+function greeting(hour = new Date().getHours()) {
+  if (hour >= 5 && hour < 12) return "Good morning";
+  if (hour >= 12 && hour < 17) return "Good afternoon";
+  return "Good evening";
+}
+
 function render({ full = false } = {}) {
-  const hour = new Date().getHours();
-  $("#greeting").textContent = `${hour < 12 ? "Good morning" : hour < 18 ? "Good afternoon" : "Good evening"}, ${state.name}`;
+  $("#greeting").textContent = `${greeting()}, ${state.name}`;
   const title = state.view === "home" ? "Our Home" : TYPES[state.view].title;
   $("#view-title").textContent = title;
   $("#nav-title").textContent = title;
@@ -965,10 +970,16 @@ $("#leave-board").onclick = () => {
   location.href = location.pathname;
 };
 document.querySelectorAll("#tabbar button").forEach((b) => (b.onclick = () => go(b.dataset.view)));
-// Refresh relative times ("5m ago", overdue colours) every minute
+// Refresh the greeting, "5m ago" times and overdue colours every minute
 setInterval(render, 60000);
-// Coming back to the app after a while: refresh times straight away
-document.addEventListener("visibilitychange", () => { if (!document.hidden && state.api) render(); });
+// iOS freezes a Home Screen app in the background and shows the frozen screen when you
+// return; visibilitychange alone doesn't always fire in that mode, so listen to every
+// "back in front" signal and refresh straight away.
+const refreshOnReturn = () => { if (!document.hidden && !$("#app").hidden) render(); };
+document.addEventListener("visibilitychange", refreshOnReturn);
+addEventListener("pageshow", refreshOnReturn);
+addEventListener("focus", refreshOnReturn);
+document.addEventListener("resume", refreshOnReturn);
 
 if ("serviceWorker" in navigator) navigator.serviceWorker.register("sw.js").catch(() => {});
 
