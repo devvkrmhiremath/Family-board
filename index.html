@@ -17,10 +17,15 @@
   <link rel="icon" type="image/png" href="icons/icon-192.png">
   <link rel="manifest" href="manifest.webmanifest">
   <link rel="stylesheet" href="styles.css">
+  <!-- Start fetching the database code and connection while the app itself loads -->
+  <link rel="preconnect" href="https://firestore.googleapis.com" crossorigin>
+  <link rel="modulepreload" href="https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js">
+  <link rel="modulepreload" href="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js">
 </head>
 <body>
   <!-- Drifting colour fields behind the whole app -->
-  <div class="aurora" aria-hidden="true"><i></i><i></i><i></i></div>
+  <div class="aurora" aria-hidden="true"><i></i><i></i></div>
+  <div class="aurora out" aria-hidden="true"><i></i><i></i></div>
 
   <!-- Welcome screen (iOS onboarding pattern: icon, title, three features, one button) -->
   <section id="setup" class="setup" hidden>

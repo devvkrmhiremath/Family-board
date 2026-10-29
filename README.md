@@ -53,7 +53,10 @@ The board is protected by its long random code, the same way an unlisted link wo
 Open the site with `?demo` at the end of the URL. Demo mode saves only on that one device, so nothing is shared.
 
 ## Updating the app
-After you change any file, bump `VERSION` in `sw.js` so the phones download the new version. You may need to close and reopen the app twice.
+After you change any file, bump `VERSION` in `sw.js`. Phones pick up the new version by themselves a few seconds after the app is opened (it reloads once, or waits until you leave the app if you're typing).
+
+## Performance
+The app opens straight from the phone's cache and fetches updates in the background. Lists reuse rows instead of rebuilding them, animations only move or fade layers (GPU work), and off-screen sections are skipped. To measure: serve the folder (`python3 -m http.server 8765`) and run `node tools/perf.js` (needs Playwright).
 
 ## Files
 | File | What it does |

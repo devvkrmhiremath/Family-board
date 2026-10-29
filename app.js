@@ -35,10 +35,17 @@ const ICONS = {
   check: '<path d="M5 12.5 10 17 19 7"/>',
   heart: '<path d="M19.5 12.6 12 20l-7.5-7.4A5 5 0 1 1 12 6a5 5 0 1 1 7.5 6.6z"/>',
 };
+const iconCache = new Map(); // parse each SVG once, then clone (much cheaper than innerHTML per row)
 function icon(name, cls = "i") {
-  const span = document.createElement("span");
-  span.innerHTML = `<svg class="${cls}" viewBox="0 0 24 24" aria-hidden="true">${ICONS[name]}</svg>`;
-  return span.firstChild;
+  const key = `${name}|${cls}`;
+  let tpl = iconCache.get(key);
+  if (!tpl) {
+    const span = document.createElement("span");
+    span.innerHTML = `<svg class="${cls}" viewBox="0 0 24 24" aria-hidden="true">${ICONS[name]}</svg>`;
+    tpl = span.firstChild;
+    iconCache.set(key, tpl);
+  }
+  return tpl.cloneNode(true);
 }
 
 // ---------- motion & feel ----------
@@ -81,13 +88,43 @@ function burst(x, y, count = 12, power = 1) {
 }
 const celebrate = () => burst(innerWidth / 2, innerHeight * 0.4, 70, 3.2);
 
-// Shrink a row away before it leaves the list
-function collapse(el) {
-  if (reduceMotion.matches || !el.isConnected) return Promise.resolve();
-  return el.animate(
-    [{ height: `${el.offsetHeight}px`, opacity: 1 }, { height: "0px", opacity: 0 }],
-    { duration: 240, easing: "cubic-bezier(.4,0,.2,1)", fill: "forwards" },
-  ).finished;
+// Rows slide to their new place when the list changes (FLIP: record where each row
+// was, re-render, then animate from the old spot with transform only, so the GPU
+// does the work and nothing is laid out again mid-animation).
+// Only rows in sections on or near the screen are measured. Measuring a row inside an
+// off-screen section would force the browser to lay out a section it is skipping.
+function visibleRows() {
+  const vh = innerHeight, rows = [];
+  document.querySelectorAll("#content > .list, #content > .notes").forEach((section) => {
+    const r = section.getBoundingClientRect();
+    if (r.bottom < -vh * 0.5 || r.top > vh * 1.5) return;
+    section.querySelectorAll("[data-id]").forEach((el) => rows.push(el));
+  });
+  return rows;
+}
+function rowPositions() {
+  const map = new Map();
+  if (reduceMotion.matches) return map;
+  for (const el of visibleRows()) map.set(el.dataset.id, el.getBoundingClientRect().top);
+  return map;
+}
+function slideRows(before) {
+  if (!before.size) return;
+  const vh = innerHeight;
+  const moves = [];
+  visibleRows().forEach((el) => {
+    const old = before.get(el.dataset.id);
+    if (old === undefined) return;
+    const now = el.getBoundingClientRect().top;
+    const dy = old - now;
+    if (Math.abs(dy) < 1 || (old > vh && now > vh) || (old < -80 && now < -80)) return;
+    moves.push([el, dy]);
+  });
+  // All reads above, all writes below: one layout, no thrashing
+  for (const [el, dy] of moves) {
+    el.animate([{ transform: `translateY(${dy}px)` }, { transform: "none" }],
+      { duration: 420, easing: "cubic-bezier(.25,1.15,.4,1)" });
+  }
 }
 
 // Numbers on Home roll up to their new value
@@ -211,8 +248,12 @@ async function firebaseBackend(code) {
   const itemsRef = fs.collection(boardRef, "items");
   return {
     subscribeItems(cb, onStatus) {
+      let first = true;
       return fs.onSnapshot(itemsRef, { includeMetadataChanges: true }, (snap) => {
         onStatus(!snap.metadata.fromCache);
+        // Metadata-only snapshots ("now confirmed by the server") change nothing on screen
+        if (!first && snap.docChanges().length === 0) return;
+        first = false;
         cb(snap.docs.map((d) => {
           const x = d.data({ serverTimestamps: "estimate" });
           return { ...x, id: d.id, createdAt: x.createdAt?.toMillis?.() ?? Date.now() };
@@ -414,7 +455,7 @@ async function openBoard(code, { newName = "" } = {}) {
     state.members = members;
     if (name) state.boardName = name;
     boards.upsert(code, { ...(name ? { name } : {}), members });
-    render();
+    scheduleRender();
   }));
   let offlineTimer;
   state.unsubscribe.push(api.subscribeItems(
@@ -422,7 +463,7 @@ async function openBoard(code, { newName = "" } = {}) {
       if (state.loaded) announcePartnerAdds(items);
       state.items = items;
       state.loaded = true;
-      render();
+      scheduleRender();
     },
     (online) => {
       // Brief cache reads at startup are normal, so wait before calling it "offline"
@@ -469,6 +510,7 @@ function render({ full = false } = {}) {
   $("#board-btn-name").textContent = state.boardName;
   $("#view-title").textContent = title;
   document.documentElement.dataset.view = state.view; // drives the section colours
+  setAurora(state.view);
   $("#nav-title").textContent = title;
   document.querySelectorAll("#tabbar button").forEach((b) => {
     const v = b.dataset.view;
@@ -494,6 +536,8 @@ function render({ full = false } = {}) {
   // The very first paint staggers rows in; after that only new rows animate.
   motion.stagger = state.loaded && !motion.painted;
   motion.i = 0;
+  const sameView = renderedView === state.view;
+  const before = sameView ? rowPositions() : new Map();
   const content = $("#content");
   if (!full && content && document.activeElement?.closest?.(".composer")) {
     content.replaceChildren(...viewContent().filter(Boolean));
@@ -507,8 +551,31 @@ function render({ full = false } = {}) {
   if (state.loaded) {
     state.items.forEach((i) => seen.add(i.id));
     motion.painted = true;
+    pruneRowCache();
   }
+  renderedView = state.view;
+  slideRows(before);
   rollNumbers();
+}
+let renderedView = null;
+// Live updates often arrive in bursts (a local write, then the server's confirmation,
+// then the board's member list). Draw once per frame, not once per message.
+let renderQueued = false;
+function scheduleRender() {
+  if (renderQueued) return;
+  renderQueued = true;
+  requestAnimationFrame(() => { renderQueued = false; render(); });
+}
+// Crossfade the background colours to a section's palette
+function setAurora(view) {
+  const [a, b] = document.querySelectorAll(".aurora");
+  const shown = a.classList.contains("out") ? b : a;
+  if (shown.dataset.palette === view) return;
+  if (!shown.dataset.palette) { shown.dataset.palette = view; return; } // first paint: no fade
+  const next = shown === a ? b : a;
+  next.dataset.palette = view;
+  next.classList.remove("out");
+  shown.classList.add("out");
 }
 // How a row should arrive: staggered on first paint, sliding in when new, still otherwise.
 function arrival(item) {
@@ -532,7 +599,27 @@ function byChip(name) {
   return h("span", { class: `chip ${isMe(name) ? "me" : "partner"}` }, isMe(name) ? "You" : name || "?");
 }
 
+// Rows are kept between renders and only rebuilt when something they show changes.
+// A live update from your partner then touches one row instead of rebuilding hundreds.
+const rowCache = new Map(); // id -> { sig, el }
+function rowSignature(item) {
+  const dueCls = item.type === "reminder" && item.due && !item.done
+    ? (item.due < Date.now() ? "o" : item.due - Date.now() < 86400000 ? "s" : "") : "";
+  return [item.text, item.done, item.due, dueCls, item.due && fmtDue(item.due), item.for, item.by, item.doneBy, ago(item.createdAt), state.name].join("\u0001");
+}
+function pruneRowCache() {
+  const live = new Set(state.items.map((i) => i.id));
+  for (const id of rowCache.keys()) if (!live.has(id)) rowCache.delete(id);
+}
 function itemRow(item) {
+  const sig = rowSignature(item);
+  const hit = rowCache.get(item.id);
+  if (hit && hit.sig === sig && seen.has(item.id)) return hit.el;
+  const el = buildRow(item);
+  rowCache.set(item.id, { sig, el });
+  return el;
+}
+function buildRow(item) {
   const meta = [];
   if (item.type === "reminder" && item.due) {
     const left = item.due - Date.now();
@@ -558,11 +645,17 @@ function itemRow(item) {
     ),
   );
   // Swipe right to complete, left to delete (the circle and the edit sheet do the same)
-  const wrap = h("div", { class: `swipe${cls}`, style },
+  const wrap = h("div", { class: `swipe${cls}`, style, "data-id": item.id },
     h("div", { class: "swipe-under done-side", "aria-hidden": "true" }, icon("task"), item.done ? "Not done" : "Done"),
     h("div", { class: "swipe-under delete-side", "aria-hidden": "true" }, "Delete", icon("x")),
     row);
   attachSwipe(wrap, row, item);
+  // Once the arrival animation has played, drop it so re-attaching the row
+  // (on the next render) doesn't replay it
+  if (cls) wrap.addEventListener("animationend", (e) => {
+    if (e.target === wrap) wrap.classList.remove("enter", "stagger");
+    if (e.animationName === "glow") wrap.classList.remove("fresh");
+  });
   return wrap;
 }
 
@@ -602,8 +695,8 @@ function attachSwipe(wrap, row, item) {
     } else if (dx < -LIMIT) {
       row.style.transform = "translateX(-105%)";
       haptic();
-      await wait(160);
-      await collapse(wrap);
+      await wait(180);
+      rowCache.delete(item.id);
       removeWithUndo([item], "Deleted");
     } else {
       row.style.transform = "";
@@ -615,7 +708,7 @@ function attachSwipe(wrap, row, item) {
 
 function noteCard(item) {
   const { cls, style } = arrival(item);
-  return h("button", { class: `note${cls}`, style, "aria-label": `Edit note: ${item.text.slice(0, 60)}`, onclick: () => openEdit(item) },
+  return h("button", { class: `note${cls}`, style, "data-id": item.id, "aria-label": `Edit note: ${item.text.slice(0, 60)}`, onclick: () => openEdit(item) },
     h("div", { class: "item-text" }, item.text),
     h("div", { class: "meta" }, byChip(item.by), h("span", {}, ago(item.createdAt))),
   );
@@ -892,19 +985,21 @@ const VIEW_ORDER = ["home", "task", "reminder", "grocery", "note"];
 function go(view) {
   if (view === state.view) { scrollTo({ top: 0, behavior: reduceMotion.matches ? "auto" : "smooth" }); return; }
   haptic();
-  const swap = () => {
-    state.view = view;
-    store.set("fb.view", view);
-    render({ full: true });
-    scrollTo(0, 0);
-  };
-  // Slide between tabs in the direction of the tab bar (Safari 18+, Chrome); instant elsewhere
-  if (document.startViewTransition && !reduceMotion.matches) {
-    document.documentElement.dataset.nav = VIEW_ORDER.indexOf(view) > VIEW_ORDER.indexOf(state.view) ? "forward" : "back";
-    document.startViewTransition(swap);
-  } else {
-    swap();
-  }
+  const forward = VIEW_ORDER.indexOf(view) > VIEW_ORDER.indexOf(state.view);
+  state.view = view;
+  store.set("fb.view", view);
+  render({ full: true });
+  scrollTo(0, 0);
+  slideIn(forward);
+}
+// The new screen slides in from the side of the tab you tapped. Only transform and
+// opacity animate, so it runs on the GPU on every iPhone, old iOS included.
+function slideIn(forward) {
+  if (reduceMotion.matches) return;
+  const dx = forward ? 48 : -48;
+  const ease = "cubic-bezier(.2,.9,.25,1)";
+  $("#main").animate([{ transform: `translateX(${dx}px)`, opacity: 0 }, { transform: "none", opacity: 1 }], { duration: 340, easing: ease });
+  $(".large-title").animate([{ transform: `translateX(${dx * 0.6}px)`, opacity: 0 }, { transform: "none", opacity: 1 }], { duration: 300, easing: ease });
 }
 const busy = new Set(); // items mid-animation, so a double tap can't toggle twice
 async function toggle(item, checkBtn) {
@@ -915,15 +1010,16 @@ async function toggle(item, checkBtn) {
   haptic();
   if (done && wrap && !reduceMotion.matches) {
     busy.add(item.id);
-    // Fill the circle, pop a little confetti, strike the text, then fold the row away
+    // Fill the circle, pop a little confetti and strike the text; then the row
+    // slides down into Done while the rows below glide up
     checkBtn.setAttribute("aria-pressed", "true");
     wrap.classList.add("completing");
     const r = checkBtn.getBoundingClientRect();
     burst(r.left + r.width / 2, r.top + r.height / 2, 10);
-    await wait(420);
-    await collapse(wrap);
+    await wait(380);
     busy.delete(item.id);
   }
+  rowCache.delete(item.id);
   state.api.update(item.id, { done, doneBy: done ? state.name : null })
     .catch(() => { toast("Couldn't update. Check your connection."); render({ full: true }); });
   if (lastOne) {
@@ -1092,13 +1188,10 @@ function switchBoard(code, { newName = "", message } = {}) {
   haptic();
   state.view = "home";
   store.set("fb.view", "home");
-  const swap = () => { openBoard(code, { newName }); scrollTo(0, 0); };
-  if (document.startViewTransition && !reduceMotion.matches) {
-    document.documentElement.dataset.nav = "forward";
-    document.startViewTransition(swap);
-  } else {
-    swap();
-  }
+  rowCache.clear();
+  openBoard(code, { newName });
+  scrollTo(0, 0);
+  slideIn(true);
   toast(message || `Opened ${boardTitle(boards.get(code))}`);
 }
 function createBoard() {
@@ -1189,13 +1282,29 @@ setInterval(render, 60000);
 // iOS freezes a Home Screen app in the background and shows the frozen screen when you
 // return; visibilitychange alone doesn't always fire in that mode, so listen to every
 // "back in front" signal and refresh straight away.
-const refreshOnReturn = () => { if (!document.hidden && !$("#app").hidden) render(); };
+const refreshOnReturn = () => {
+  if (document.hidden) return;
+  if (!$("#app").hidden) render();
+  // iOS rarely checks for app updates on its own; ask whenever the app comes back
+  navigator.serviceWorker?.getRegistration().then((r) => r?.update()).catch(() => {});
+};
 document.addEventListener("visibilitychange", refreshOnReturn);
 addEventListener("pageshow", refreshOnReturn);
 addEventListener("focus", refreshOnReturn);
 document.addEventListener("resume", refreshOnReturn);
 
-if ("serviceWorker" in navigator) navigator.serviceWorker.register("sw.js").catch(() => {});
+if ("serviceWorker" in navigator) {
+  const hadController = !!navigator.serviceWorker.controller;
+  navigator.serviceWorker.register("sw.js").catch(() => {});
+  // A new version took over: reload into it right away, or, if you're typing or
+  // have a sheet open, the next time you leave the app
+  navigator.serviceWorker.addEventListener("controllerchange", () => {
+    if (!hadController) return;
+    const busyNow = document.activeElement?.matches?.("input, textarea") || document.querySelector("dialog[open]");
+    if (busyNow) document.addEventListener("visibilitychange", () => location.reload(), { once: true });
+    else location.reload();
+  });
+}
 
 if (state.name && state.code) openBoard(state.code);
 else showSetup();
