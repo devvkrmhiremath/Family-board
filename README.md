@@ -4,6 +4,7 @@ A shared board for two people: **tasks, reminders, a grocery list and notes**. B
 It runs in the browser and installs on the iPhone home screen like an app. There's no App Store and nothing to compile.
 
 - Live sync between phones (Firebase Firestore, free tier)
+- **Multiple boards**: e.g. "Our Home" with your partner, "Parents" with your parents, "Goa Trip" with friends. Each has its own lists and its own people. Anyone can create, join, rename, switch and leave boards from the board button at the top left.
 - Works offline, and changes sync when you're back online
 - Every item shows who added it, and who checked it off
 - Tasks can be assigned to either of you

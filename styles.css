@@ -402,7 +402,8 @@ main { padding: 6px 16px calc(env(safe-area-inset-bottom) + 112px); }
   font-size: .9375rem;
 }
 .install-hint p { margin: 0; flex: 1; line-height: 1.4; color: var(--muted); }
-.install-hint strong { color: var(--ink); display: block; margin-bottom: 2px; }
+.install-hint strong { color: var(--ink); }
+.install-hint p > strong:first-child { display: block; margin-bottom: 2px; }
 .install-hint svg.inline { width: 1.15em; height: 1.15em; vertical-align: -3px; color: var(--tint); }
 .install-hint .icon-btn { margin: -12px 0; width: 44px; height: 44px; }
 .install-hint .icon-btn svg.i { width: 18px; height: 18px; stroke-width: 2.4; }
@@ -468,6 +469,60 @@ main { padding: 6px 16px calc(env(safe-area-inset-bottom) + 112px); }
 .toast span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .toast button { border: 0; background: none; color: #ff8fa6; font-weight: 600; min-height: 44px; padding: 0 14px; border-radius: 999px; flex: 0 0 auto; }
 @media (prefers-color-scheme: dark) { .toast button { color: #d30f45; } }
+
+/* ---------- Boards ---------- */
+.sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+/* Board switcher: a glass capsule at the top left, like an iOS 26 bar button */
+.board-btn {
+  display: inline-flex; align-items: center; gap: 6px; max-width: 46vw;
+  min-height: 36px; padding: 0 10px 0 12px; border-radius: 999px;
+  border: .5px solid var(--glass-edge); background: var(--glass); color: var(--tint);
+  -webkit-backdrop-filter: saturate(1.8) blur(20px); backdrop-filter: saturate(1.8) blur(20px);
+  font-size: .9375rem; font-weight: 600; position: relative;
+  transition: transform var(--t-fast) var(--ease-spring);
+}
+.board-btn::after { content: ""; position: absolute; inset: -4px 0; } /* 44pt hit area */
+.board-btn:active { transform: scale(.95); }
+.board-btn svg.i { width: 18px; height: 18px; stroke-width: 2; }
+.board-btn .chevron { width: 14px; height: 14px; stroke-width: 2.6; }
+#board-btn-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+/* Separators between cells in a group, inset like iOS */
+.group > * + * {
+  background-image: linear-gradient(var(--line), var(--line));
+  background-size: calc(100% - 16px) 1px; background-position: 16px 0; background-repeat: no-repeat;
+}
+.group > .board-row + .board-row { background-position: 60px 0; background-size: calc(100% - 60px) 1px; }
+.cell-btn:active, .board-row:active { background-color: var(--press); }
+
+.board-row {
+  display: flex; align-items: center; gap: 12px; width: 100%; min-height: 60px;
+  border: 0; background-color: transparent; padding: 8px 16px; text-align: left; color: var(--ink);
+}
+.board-mono {
+  flex: 0 0 auto; width: 32px; height: 32px; border-radius: 8px; color: #fff;
+  display: grid; place-items: center; font-weight: 700; font-size: .9375rem;
+}
+.board-row-text { flex: 1; min-width: 0; display: grid; gap: 1px; }
+.board-row-text strong { font-weight: 400; font-size: 1.0625rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.board-row-text span { font-size: .8125rem; color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.board-check { width: 20px; height: 20px; color: var(--tint); stroke-width: 2.6; flex: 0 0 auto; }
+
+.inline-form { display: flex; align-items: center; gap: 8px; padding: 6px 8px 6px 0; animation: drop-in 300ms var(--ease-spring); }
+.inline-form .cell-input { flex: 1; min-width: 0; }
+.inline-form .btn { min-height: 36px; padding: 0 16px; font-size: .9375rem; }
+
+.member-row { display: flex; align-items: center; gap: 12px; min-height: 48px; padding: 6px 16px; }
+.member-row .avatar { margin: 0; width: 30px; height: 30px; }
+.member-row .muted { color: var(--muted); }
+
+.confirm-leave {
+  margin-top: 16px; background: var(--card); border-radius: var(--radius); padding: 16px;
+  text-align: center; animation: drop-in 320ms var(--ease-spring);
+}
+.confirm-leave p { margin: 0 0 12px; font-weight: 600; }
+.confirm-actions { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.btn.destructive-fill { background: #d70015; color: #fff; }
 
 /* ---------- Motion ---------- */
 /* Completing: dot fills, text strikes through, then the row folds away */

@@ -32,6 +32,7 @@ const ICONS = {
   calendar: '<rect x="3" y="4" width="18" height="17" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/>',
   share: '<path d="M12 3v13M7 8l5-5 5 5M5 13v6a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-6"/>',
   sparkle: '<path d="M12 3v4M12 17v4M3 12h4M17 12h4M5.6 5.6l2.8 2.8M15.6 15.6l2.8 2.8M5.6 18.4l2.8-2.8M15.6 8.4l2.8-2.8"/>',
+  check: '<path d="M5 12.5 10 17 19 7"/>',
   heart: '<path d="M19.5 12.6 12 20l-7.5-7.4A5 5 0 1 1 12 6a5 5 0 1 1 7.5 6.6z"/>',
 };
 function icon(name, cls = "i") {
@@ -179,26 +180,38 @@ function timePresets() {
 }
 
 // ---------- data backends ----------
-// Both backends expose the same tiny API.
-async function firebaseBackend(code) {
-  const [{ initializeApp }, fs] = await Promise.all([
-    import(`${SDK}/firebase-app.js`),
-    import(`${SDK}/firebase-firestore.js`),
-  ]);
-  const app = initializeApp(firebaseConfig);
-  let db;
-  try {
-    db = fs.initializeFirestore(app, {
-      localCache: fs.persistentLocalCache({ tabManager: fs.persistentMultipleTabManager() }),
-    });
-  } catch {
-    db = fs.getFirestore(app);
+// Both backends expose the same tiny API for one board. Every subscribe returns
+// an unsubscribe function, so switching boards can cleanly let go of the old one.
+let firebaseCore; // Firebase starts once per page; boards just point at different documents
+async function getFirebase() {
+  if (!firebaseCore) {
+    firebaseCore = (async () => {
+      const [{ initializeApp }, fs] = await Promise.all([
+        import(`${SDK}/firebase-app.js`),
+        import(`${SDK}/firebase-firestore.js`),
+      ]);
+      const app = initializeApp(firebaseConfig);
+      let db;
+      try {
+        db = fs.initializeFirestore(app, {
+          localCache: fs.persistentLocalCache({ tabManager: fs.persistentMultipleTabManager() }),
+        });
+      } catch {
+        db = fs.getFirestore(app);
+      }
+      return { fs, db };
+    })();
   }
-  const familyRef = fs.doc(db, "families", code);
-  const itemsRef = fs.collection(familyRef, "items");
+  return firebaseCore;
+}
+
+async function firebaseBackend(code) {
+  const { fs, db } = await getFirebase();
+  const boardRef = fs.doc(db, "families", code);
+  const itemsRef = fs.collection(boardRef, "items");
   return {
     subscribeItems(cb, onStatus) {
-      fs.onSnapshot(itemsRef, { includeMetadataChanges: true }, (snap) => {
+      return fs.onSnapshot(itemsRef, { includeMetadataChanges: true }, (snap) => {
         onStatus(!snap.metadata.fromCache);
         cb(snap.docs.map((d) => {
           const x = d.data({ serverTimestamps: "estimate" });
@@ -206,14 +219,20 @@ async function firebaseBackend(code) {
         }));
       }, (err) => { console.error(err); onStatus(false); toast("Can't sync. Check the Firestore rules."); });
     },
-    subscribeMembers(cb) {
-      fs.onSnapshot(familyRef, (snap) => cb(snap.data()?.members ?? []), () => {});
+    // The board document holds its shared name and the people on it
+    subscribeBoard(cb) {
+      return fs.onSnapshot(boardRef, (snap) => {
+        const d = snap.data() ?? {};
+        cb({ name: d.name || "", members: d.members ?? [] });
+      }, () => {});
     },
     add: (item) => fs.addDoc(itemsRef, { ...item, createdAt: fs.serverTimestamp() }),
     restore: ({ id, createdAt, ...rest }) => fs.setDoc(fs.doc(itemsRef, id), { ...rest, createdAt: fs.Timestamp.fromMillis(createdAt) }),
     update: (id, patch) => fs.updateDoc(fs.doc(itemsRef, id), patch),
     remove: (id) => fs.deleteDoc(fs.doc(itemsRef, id)),
-    join: (name) => fs.setDoc(familyRef, { members: fs.arrayUnion(name) }, { merge: true }),
+    join: (name) => fs.setDoc(boardRef, { members: fs.arrayUnion(name) }, { merge: true }),
+    leave: (name) => fs.setDoc(boardRef, { members: fs.arrayRemove(name) }, { merge: true }),
+    rename: (name) => fs.setDoc(boardRef, { name }, { merge: true }),
   };
 }
 
@@ -221,33 +240,66 @@ async function firebaseBackend(code) {
 function demoBackend(code) {
   const key = `fb.demo.${code}`;
   let data;
-  try { data = JSON.parse(store.get(key)) || { items: [], members: [] }; } catch { data = { items: [], members: [] }; }
-  let itemsCb = () => {}, membersCb = () => {};
+  try { data = JSON.parse(store.get(key)) || {}; } catch { data = {}; }
+  data = { items: [], members: [], name: "", ...data };
+  let itemsCb = () => {}, boardCb = () => {};
   const emit = () => {
     store.set(key, JSON.stringify(data));
     itemsCb(structuredClone(data.items));
-    membersCb([...data.members]);
+    boardCb({ name: data.name, members: [...data.members] });
   };
   return {
-    subscribeItems(cb, onStatus) { itemsCb = cb; onStatus(true); cb(structuredClone(data.items)); },
-    subscribeMembers(cb) { membersCb = cb; cb([...data.members]); },
+    subscribeItems(cb, onStatus) {
+      itemsCb = cb; onStatus(true); cb(structuredClone(data.items));
+      return () => (itemsCb = () => {});
+    },
+    subscribeBoard(cb) {
+      boardCb = cb; cb({ name: data.name, members: [...data.members] });
+      return () => (boardCb = () => {});
+    },
     async add(item) { data.items.push({ ...item, id: crypto.randomUUID(), createdAt: Date.now() }); emit(); },
     async restore(item) { data.items.push(item); emit(); },
     async update(id, patch) { Object.assign(data.items.find((i) => i.id === id) ?? {}, patch); emit(); },
     async remove(id) { data.items = data.items.filter((i) => i.id !== id); emit(); },
     async join(name) { if (!data.members.includes(name)) data.members.push(name); emit(); },
+    async leave(name) { data.members = data.members.filter((m) => m !== name); emit(); },
+    async rename(name) { data.name = name; emit(); },
   };
 }
+
+// ---------- boards on this phone ----------
+// Each phone keeps its own list of boards it has joined: [{ code, name, members }].
+// The name and members are cached from the board itself so the list shows them instantly.
+const DEFAULT_BOARD_NAME = "Our Home";
+const boards = {
+  list() {
+    try { return JSON.parse(store.get("fb.boards")) || []; } catch { return []; }
+  },
+  save(list) { store.set("fb.boards", JSON.stringify(list)); },
+  get(code) { return this.list().find((b) => b.code === code); },
+  upsert(code, patch = {}) {
+    const list = this.list();
+    const i = list.findIndex((b) => b.code === code);
+    if (i === -1) list.push({ code, name: "", members: [], ...patch });
+    else list[i] = { ...list[i], ...patch };
+    this.save(list);
+  },
+  remove(code) { this.save(this.list().filter((b) => b.code !== code)); },
+};
+// Older versions remembered a single board; carry it over
+if (!store.get("fb.boards") && store.get("fb.family")) boards.upsert(store.get("fb.family"));
 
 // ---------- state ----------
 const state = {
   name: store.get("fb.name") || "",
   code: store.get("fb.family") || "",
+  boardName: "",
   view: store.get("fb.view") || "home",
   items: [],
   members: [],
   loaded: false,
   api: null,
+  unsubscribe: [],
   // composer state survives live re-renders
   quickType: "task",
   drafts: {},
@@ -257,19 +309,27 @@ const state = {
 };
 const configured = !String(firebaseConfig.apiKey || "").startsWith("PASTE");
 const isMe = (name) => !!name && name === state.name;
-const partnerName = () => state.members.find((m) => m !== state.name);
+const others = () => state.members.filter((m) => m !== state.name);
+const partnerName = () => others()[0];
+const boardTitle = (b) => b?.name || DEFAULT_BOARD_NAME;
 const isIOS = /iphone|ipad|ipod/i.test(navigator.userAgent);
 const standalone = navigator.standalone || matchMedia("(display-mode: standalone)").matches;
 
 // Pick up an invite link (?family=CODE). The code stays in the URL on purpose:
 // on iPhone, "Add to Home Screen" saves the current URL, so the home-screen app
-// knows which board to open even though it has its own separate storage.
+// knows a board to open even though it has its own separate storage.
+// A new code joins that board. A known one only switches to it when opened as a
+// link in Safari: the Home Screen icon reopens whichever board you used last.
 const params = new URLSearchParams(location.search);
 const urlCode = params.get("family");
 const demo = params.has("demo") || store.get("fb.demo") === "1";
-if (urlCode && urlCode !== state.code) {
-  state.code = urlCode;
-  store.set("fb.family", urlCode);
+if (urlCode && urlCode.length >= 20) {
+  const isNew = !boards.get(urlCode);
+  if (isNew) boards.upsert(urlCode);
+  if (isNew || !standalone || !state.code) {
+    state.code = urlCode;
+    store.set("fb.family", urlCode);
+  }
 }
 
 // ---------- setup ----------
@@ -284,18 +344,19 @@ function showSetup() {
     e.preventDefault();
     const err = $("#setup-error");
     const name = $("#setup-name").value.trim();
-    if (!name) { err.textContent = "Please type your name so your partner knows who added what."; $("#setup-name").focus(); return; }
+    if (!name) { err.textContent = "Please type your name so everyone knows who added what."; $("#setup-name").focus(); return; }
     let code = state.code;
+    let created = false;
     if (!code) {
       const typed = $("#setup-code").value.trim();
       code = typed ? extractCode(typed) : newCode();
-      if (code.length < 20) { err.textContent = "That code looks too short. Paste the whole invite link from your partner."; $("#setup-code").focus(); return; }
+      created = !typed;
+      if (code.length < 20) { err.textContent = "That code looks too short. Paste the whole invite link."; $("#setup-code").focus(); return; }
     }
     state.name = name;
-    state.code = code;
     store.set("fb.name", name);
-    store.set("fb.family", code);
-    start();
+    boards.upsert(code, created ? { name: DEFAULT_BOARD_NAME } : {});
+    openBoard(code, { newName: created ? DEFAULT_BOARD_NAME : "" });
   };
 }
 // Accept either a bare code or a full invite link pasted into the field.
@@ -303,31 +364,60 @@ function extractCode(text) {
   try { return new URL(text).searchParams.get("family") || text; } catch { return text; }
 }
 
-async function start() {
-  $("#setup").hidden = true;
-  $("#app").hidden = false;
+// The app shell is set up once; boards come and go underneath it.
+let shellReady = false;
+function setupShell() {
+  if (shellReady) return;
+  shellReady = true;
   if (demo) store.set("fb.demo", "1");
-  const url = new URL(location.href);
-  url.searchParams.set("family", state.code);
-  history.replaceState(null, "", url);
-
   // Large title collapses into the navigation bar as you scroll, like iOS
   new IntersectionObserver(([e]) => $("#navbar").classList.toggle("scrolled", !e.isIntersecting), {
     rootMargin: `-${$("#navbar").offsetHeight}px 0px 0px 0px`,
   }).observe($("#view-title"));
-  render();
+}
 
+// Connect to one board: drop the previous board's live updates, reset what's on
+// screen, then subscribe to the new one.
+async function openBoard(code, { newName = "" } = {}) {
+  state.unsubscribe.forEach((u) => { try { u(); } catch {} });
+  state.unsubscribe = [];
+  Object.assign(state, {
+    code, items: [], members: [], loaded: false, api: null,
+    boardName: boardTitle(boards.get(code)), who: "",
+  });
+  seen.clear();
+  motion.painted = false;
+  Object.keys(prevCounts).forEach((k) => delete prevCounts[k]);
+  store.set("fb.family", code);
+  const url = new URL(location.href);
+  url.searchParams.set("family", code);
+  history.replaceState(null, "", url);
+
+  $("#setup").hidden = true;
+  $("#app").hidden = false;
+  setupShell();
+  render({ full: true });
+
+  let api;
   try {
-    state.api = configured && !demo ? await firebaseBackend(state.code) : demoBackend(state.code);
+    api = configured && !demo ? await firebaseBackend(code) : demoBackend(code);
   } catch (err) {
     console.error(err);
     toast("Couldn't connect. Check your internet and reopen the app.");
     return;
   }
-  state.api.join(state.name).catch(() => {});
-  state.api.subscribeMembers((m) => { state.members = m; render(); });
+  if (state.code !== code) return; // switched again while connecting
+  state.api = api;
+  api.join(state.name).catch(() => {});
+  if (newName) api.rename(newName).catch(() => {});
+  state.unsubscribe.push(api.subscribeBoard(({ name, members }) => {
+    state.members = members;
+    if (name) state.boardName = name;
+    boards.upsert(code, { ...(name ? { name } : {}), members });
+    render();
+  }));
   let offlineTimer;
-  state.api.subscribeItems(
+  state.unsubscribe.push(api.subscribeItems(
     (items) => {
       if (state.loaded) announcePartnerAdds(items);
       state.items = items;
@@ -339,8 +429,8 @@ async function start() {
       clearTimeout(offlineTimer);
       if (online) $("#offline").hidden = true;
       else offlineTimer = setTimeout(() => ($("#offline").hidden = false), 2500);
-    }
-  );
+    },
+  ));
 }
 
 // When your partner adds something while the app is open, say so.
@@ -375,7 +465,8 @@ function greeting(hour = new Date().getHours()) {
 
 function render({ full = false } = {}) {
   $("#greeting").textContent = `${greeting()}, ${state.name}`;
-  const title = state.view === "home" ? "Our Home" : TYPES[state.view].title;
+  const title = state.view === "home" ? state.boardName : TYPES[state.view].title;
+  $("#board-btn-name").textContent = state.boardName;
   $("#view-title").textContent = title;
   $("#nav-title").textContent = title;
   document.querySelectorAll("#tabbar button").forEach((b) => {
@@ -561,13 +652,20 @@ function segmented(label, options, current, onPick) {
     }, o.icon ? icon(o.icon) : null, o.label)));
 }
 
+// Everyone on the board can be picked. Two people fit a segmented control;
+// bigger boards (parents, flatmates) switch to wrapping capsule buttons.
 function whoOptions() {
-  const partner = partnerName();
   return [
-    { value: "", label: "Either" },
+    { value: "", label: others().length > 1 ? "Anyone" : "Either" },
     { value: state.name, label: "Me" },
-    partner && { value: partner, label: partner },
-  ].filter(Boolean);
+    ...others().map((m) => ({ value: m, label: m })),
+  ];
+}
+function whoPicker(current, onPick) {
+  const opts = whoOptions();
+  return opts.length <= 4
+    ? segmented("Who's doing it", opts, current, onPick)
+    : chipGroup("Who's doing it", opts, current, onPick);
 }
 
 // The add box. On Home it has a type switch so anything can be added from one place.
@@ -619,7 +717,7 @@ function composer(type, onHome) {
   if (type === "task") {
     form.append(h("div", { class: "composer-extra" },
       h("p", { class: "label" }, "Who's doing it"),
-      segmented("Who's doing it", whoOptions(), state.who, (v) => { state.who = v; rerender(); })));
+      whoPicker(state.who, (v) => { state.who = v; rerender(); })));
   }
 
   form.addEventListener("submit", (e) => {
@@ -745,7 +843,7 @@ function homeContent() {
   const myTasks = itemsOf("task").filter((t) => !t.done && (!t.for || isMe(t.for)));
   const toBuy = itemsOf("grocery").filter((g) => !g.done);
   const recent = [...state.items].sort((a, b) => b.createdAt - a.createdAt).slice(0, 6);
-  const partner = partnerName();
+  const alone = others().length === 0;
 
   // Smart-list tiles, as in the Reminders app: coloured icon, count, name
   const stat = (type, label) => h("button", { class: "stat", "data-type": type, "aria-label": `${label}: ${openCount(type)}`, onclick: () => go(type) },
@@ -759,10 +857,10 @@ function homeContent() {
   return [
     h("div", { class: "stats" }, stat("task", "Tasks"), stat("reminder", "Reminders"), stat("grocery", "To Buy"), stat("note", "Notes")),
 
-    !partner && section("Invite your partner"),
-    !partner && h("div", { class: "empty compact" },
-      h("p", { style: "margin:0 0 12px" }, "Share the board so you both see the same lists."),
-      h("button", { class: "btn primary block", onclick: shareInvite }, icon("heart"), "Send invite link")),
+    alone && section("Invite people"),
+    alone && h("div", { class: "empty compact" },
+      h("p", { style: "margin:0 0 12px" }, `Share “${state.boardName}” so everyone on it sees the same lists.`),
+      h("button", { class: "btn primary block", onclick: shareInvite }, icon("share"), "Send Invite Link")),
 
     section("Coming up", { label: "See all", run: () => go("reminder") }),
     reminders.length ? h("div", { class: "list" }, reminders.map(itemRow)) : quiet("Nothing in the next 3 days."),
@@ -876,10 +974,11 @@ function setupSheet(dlg) {
 }
 setupSheet($("#edit"));
 setupSheet($("#settings"));
+setupSheet($("#boards"));
 
 let editing = null, editWho = "";
 function renderEditWho() {
-  $("#edit-who").replaceChildren(segmented("Who's doing it", whoOptions(), editWho, (v) => { editWho = v; renderEditWho(); }));
+  $("#edit-who").replaceChildren(whoPicker(editWho, (v) => { editWho = v; renderEditWho(); }));
 }
 // One-tap "push it later" for reminders. Fills the date field; Save keeps it.
 function renderSnooze(due) {
@@ -941,33 +1040,146 @@ function inviteLink() {
 async function shareInvite() {
   const url = inviteLink();
   try {
-    if (navigator.share) await navigator.share({ title: "Family Board", text: "Join our Family Board", url });
+    if (navigator.share) await navigator.share({ title: state.boardName, text: `Join “${state.boardName}” on Family Board`, url });
     else { await navigator.clipboard.writeText(url); toast("Invite link copied"); }
   } catch {}
 }
 
+// ---------- boards sheet ----------
+const BOARD_COLORS = ["#d30f45", "#3634a3", "#1e7b34", "#c93400", "#0a6ebd", "#8944ab", "#636366"];
+function boardColor(code) {
+  let n = 0;
+  for (const c of code) n = (n * 31 + c.charCodeAt(0)) >>> 0;
+  return BOARD_COLORS[n % BOARD_COLORS.length];
+}
+function renderBoardList() {
+  $("#board-list").replaceChildren(...boards.list().map((b) => {
+    const current = b.code === state.code;
+    const people = (b.members || []).map((m) => (isMe(m) ? "You" : m));
+    return h("button", {
+      type: "button", class: "board-row", role: "listitem", "aria-current": current ? "true" : null,
+      onclick: () => switchBoard(b.code),
+    },
+      h("span", { class: "board-mono", style: `background:${boardColor(b.code)}`, "aria-hidden": "true" }, boardTitle(b)[0].toUpperCase()),
+      h("span", { class: "board-row-text" },
+        h("strong", {}, boardTitle(b)),
+        h("span", {}, people.length > 1 ? people.join(", ") : "Just you so far")),
+      current ? icon("check", "i board-check") : null);
+  }));
+}
+function resetBoardForms() {
+  ["new", "join"].forEach((k) => {
+    $(`#${k}-board-row`).hidden = true;
+    $(`#${k}-board-btn`).setAttribute("aria-expanded", "false");
+  });
+  $("#new-board-name").value = "";
+  $("#join-board-code").value = "";
+  $("#boards-error").textContent = "";
+}
+function toggleBoardForm(kind) {
+  const row = $(`#${kind}-board-row`);
+  const open = row.hidden;
+  resetBoardForms();
+  row.hidden = !open;
+  $(`#${kind}-board-btn`).setAttribute("aria-expanded", String(open));
+  if (open) row.querySelector("input").focus();
+}
+function switchBoard(code, { newName = "", message } = {}) {
+  closeSheet($("#boards"));
+  if (code === state.code && !newName) return;
+  haptic();
+  state.view = "home";
+  store.set("fb.view", "home");
+  const swap = () => { openBoard(code, { newName }); scrollTo(0, 0); };
+  if (document.startViewTransition && !reduceMotion.matches) {
+    document.documentElement.dataset.nav = "forward";
+    document.startViewTransition(swap);
+  } else {
+    swap();
+  }
+  toast(message || `Opened ${boardTitle(boards.get(code))}`);
+}
+function createBoard() {
+  const name = $("#new-board-name").value.trim();
+  if (!name) { $("#boards-error").textContent = "Give the new board a name, like Parents or Goa Trip."; $("#new-board-name").focus(); return; }
+  const code = newCode();
+  boards.upsert(code, { name, members: [state.name] });
+  switchBoard(code, { newName: name, message: `Created ${name}. Invite people from the person button.` });
+}
+function joinBoard() {
+  const code = extractCode($("#join-board-code").value.trim());
+  if (code.length < 20) { $("#boards-error").textContent = "That doesn't look like a full invite link. Paste the whole link you were sent."; $("#join-board-code").focus(); return; }
+  if (boards.get(code)) return switchBoard(code);
+  boards.upsert(code);
+  switchBoard(code, { message: "Joined the board" });
+}
+$("#open-boards").onclick = () => {
+  resetBoardForms();
+  renderBoardList();
+  openSheet($("#boards"));
+};
+$("#new-board-btn").onclick = () => toggleBoardForm("new");
+$("#join-board-btn").onclick = () => toggleBoardForm("join");
+$("#new-board-create").onclick = createBoard;
+$("#join-board-go").onclick = joinBoard;
+$("#new-board-name").addEventListener("keydown", (e) => { if (e.key === "Enter") { e.preventDefault(); createBoard(); } });
+$("#join-board-code").addEventListener("keydown", (e) => { if (e.key === "Enter") { e.preventDefault(); joinBoard(); } });
+$("#boards-form").addEventListener("submit", (e) => e.preventDefault());
+
+// ---------- board settings sheet ----------
 $("#open-settings").onclick = () => {
   $("#settings-name").value = state.name;
+  $("#settings-board-name").value = state.boardName;
   $("#settings-code").textContent = state.code;
+  const people = [...state.members].sort((a, b) => (isMe(b) ? 1 : 0) - (isMe(a) ? 1 : 0));
+  $("#settings-members").replaceChildren(...(people.length ? people : [state.name]).map((m) =>
+    h("div", { class: "member-row", role: "listitem" },
+      h("span", { class: `avatar${isMe(m) ? " me" : ""}`, "aria-hidden": "true" }, m[0].toUpperCase()),
+      h("span", {}, m, isMe(m) ? h("span", { class: "muted" }, " (you)") : null))));
+  $("#confirm-leave").hidden = true;
   openSheet($("#settings"));
 };
 $("#share-invite").onclick = shareInvite;
 $("#settings-form").addEventListener("submit", (e) => {
   e.preventDefault();
   const name = $("#settings-name").value.trim();
+  const boardName = $("#settings-board-name").value.trim();
+  const changes = [];
   if (name && name !== state.name) {
+    const old = state.name;
     state.name = name;
     store.set("fb.name", name);
-    state.api?.join(name).catch(() => {});
-    render();
-    toast("Name updated");
+    state.api?.join(name).then(() => state.api?.leave(old)).catch(() => {});
+    changes.push("name");
   }
+  if (boardName && boardName !== state.boardName) {
+    state.boardName = boardName;
+    boards.upsert(state.code, { name: boardName });
+    state.api?.rename(boardName).catch(() => toast("Couldn't rename the board. Check your connection."));
+    changes.push("board name");
+  }
+  if (changes.length) { render(); toast(changes.length === 2 ? "Saved" : `Updated ${changes[0]}`); }
   closeSheet($("#settings"));
 });
+// Leaving asks for confirmation inside the sheet, like an iOS action sheet
 $("#leave-board").onclick = () => {
-  if (!confirm("Leave this board on this phone? Your lists stay saved for your partner, and you can rejoin with the invite link.")) return;
-  store.del("fb.family"); store.del("fb.demo");
-  location.href = location.pathname;
+  $("#confirm-leave-name").textContent = state.boardName;
+  $("#confirm-leave").hidden = false;
+  $("#confirm-leave").scrollIntoView({ behavior: reduceMotion.matches ? "auto" : "smooth", block: "nearest" });
+};
+$("#confirm-leave-no").onclick = () => ($("#confirm-leave").hidden = true);
+$("#confirm-leave-yes").onclick = () => {
+  const leaving = state.code, name = state.boardName;
+  state.api?.leave(state.name).catch(() => {});
+  boards.remove(leaving);
+  closeSheet($("#settings"));
+  const next = boards.list()[0];
+  if (next) {
+    switchBoard(next.code, { message: `Left ${name}` });
+  } else {
+    store.del("fb.family"); store.del("fb.demo");
+    location.href = location.pathname;
+  }
 };
 document.querySelectorAll("#tabbar button").forEach((b) => (b.onclick = () => go(b.dataset.view)));
 // Refresh the greeting, "5m ago" times and overdue colours every minute
@@ -983,5 +1195,5 @@ document.addEventListener("resume", refreshOnReturn);
 
 if ("serviceWorker" in navigator) navigator.serviceWorker.register("sw.js").catch(() => {});
 
-if (state.name && state.code) start();
+if (state.name && state.code) openBoard(state.code);
 else showSetup();

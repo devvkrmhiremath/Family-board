@@ -70,10 +70,17 @@
   <div id="app" hidden>
     <!-- iOS navigation bar: transparent at rest, glass with a small centred title once the large title scrolls away -->
     <header class="navbar" id="navbar">
-      <span class="nav-side"><span id="offline" class="offline-pill" role="status" hidden>Offline</span></span>
+      <span class="nav-side">
+        <button id="open-boards" class="board-btn" aria-haspopup="dialog">
+          <svg class="i" viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/></svg>
+          <span class="sr-only">Boards. Current board: </span><span id="board-btn-name">Our Home</span>
+          <svg class="i chevron" viewBox="0 0 24 24" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg>
+        </button>
+      </span>
       <span class="nav-title" id="nav-title" aria-hidden="true">Our Home</span>
       <span class="nav-side right">
-        <button id="open-settings" class="icon-btn tint" aria-label="Settings and invite">
+        <span id="offline" class="offline-pill" role="status" hidden>Offline</span>
+        <button id="open-settings" class="icon-btn tint" aria-label="Board settings and invite">
           <svg class="i" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="10"/><circle cx="12" cy="10" r="3.2"/><path d="M6.2 18.4a7 7 0 0 1 11.6 0"/></svg>
         </button>
       </span>
@@ -130,29 +137,74 @@
     </form>
   </dialog>
 
-  <!-- Settings sheet: grouped list like iOS Settings -->
+  <!-- Boards sheet: switch, create and join boards -->
+  <dialog id="boards" class="sheet" aria-labelledby="boards-title">
+    <form id="boards-form" novalidate>
+      <div class="sheet-grab" aria-hidden="true"></div>
+      <header class="sheet-bar">
+        <span class="bar-btn" aria-hidden="true"></span>
+        <h2 id="boards-title" tabindex="-1" autofocus>Boards</h2>
+        <button type="button" class="bar-btn strong" data-close>Done</button>
+      </header>
+
+      <p class="group-header">On this iPhone</p>
+      <div class="group" id="board-list" role="list"></div>
+      <p class="group-footer">Each board has its own lists and its own people. Tap one to open it.</p>
+
+      <div class="group">
+        <button type="button" class="cell-btn" id="new-board-btn" aria-expanded="false" aria-controls="new-board-row">
+          <svg class="i" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="10"/><path d="M12 8v8M8 12h8"/></svg>
+          New Board
+        </button>
+        <div class="inline-form" id="new-board-row" hidden>
+          <input id="new-board-name" class="cell-input" maxlength="40" autocapitalize="words" enterkeyhint="done" placeholder="Name, e.g. Parents or Goa Trip" aria-label="New board name">
+          <button type="button" class="btn primary" id="new-board-create">Create</button>
+        </div>
+        <button type="button" class="cell-btn" id="join-board-btn" aria-expanded="false" aria-controls="join-board-row">
+          <svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg>
+          Join a Board
+        </button>
+        <div class="inline-form" id="join-board-row" hidden>
+          <input id="join-board-code" class="cell-input" autocapitalize="off" autocorrect="off" spellcheck="false" enterkeyhint="go" placeholder="Paste invite link or code" aria-label="Invite link or board code">
+          <button type="button" class="btn primary" id="join-board-go">Join</button>
+        </div>
+      </div>
+      <p class="field-error" id="boards-error" role="alert"></p>
+    </form>
+  </dialog>
+
+  <!-- Board settings sheet: grouped list like iOS Settings -->
   <dialog id="settings" class="sheet" aria-labelledby="settings-title">
     <form id="settings-form" novalidate>
       <div class="sheet-grab" aria-hidden="true"></div>
       <header class="sheet-bar">
-        <span class="bar-btn" aria-hidden="true"></span>
+        <button type="button" class="bar-btn" data-close>Cancel</button>
         <h2 id="settings-title" tabindex="-1" autofocus>Settings</h2>
         <button type="submit" class="bar-btn strong">Done</button>
       </header>
+
+      <label class="group-header" for="settings-board-name">Board name</label>
+      <div class="group">
+        <input id="settings-board-name" class="cell-input" maxlength="40" autocapitalize="words">
+      </div>
+      <p class="group-footer">Everyone on this board sees the same name.</p>
+
+      <p class="group-header">People on this board</p>
+      <div class="group" id="settings-members" role="list"></div>
+
+      <div class="group">
+        <button type="button" class="cell-btn" id="share-invite">
+          <svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v13M7 8l5-5 5 5M5 13v6a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-6"/></svg>
+          Invite People
+        </button>
+      </div>
+      <p class="group-footer">Send the link to anyone you want on this board. They open it in Safari, type their name, then tap Share and Add to Home Screen.</p>
 
       <label class="group-header" for="settings-name">Your name</label>
       <div class="group">
         <input id="settings-name" class="cell-input" maxlength="30" autocomplete="given-name" autocapitalize="words">
       </div>
-
-      <p class="group-header">Invite</p>
-      <div class="group">
-        <button type="button" class="cell-btn" id="share-invite">
-          <svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v13M7 8l5-5 5 5M5 13v6a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-6"/></svg>
-          Share Invite Link
-        </button>
-      </div>
-      <p class="group-footer">Send the link to your partner. They open it in Safari, type their name, then tap Share and Add to Home Screen.</p>
+      <p class="group-footer">Used on all your boards.</p>
 
       <p class="group-header">Board code</p>
       <div class="group">
@@ -160,9 +212,16 @@
       </div>
 
       <div class="group">
-        <button type="button" class="cell-btn destructive centered" id="leave-board">Leave Board on This iPhone</button>
+        <button type="button" class="cell-btn destructive centered" id="leave-board">Leave This Board</button>
       </div>
-      <p class="group-footer">Your lists stay saved for your partner. You can rejoin with the invite link.</p>
+      <p class="group-footer">Removes the board from this iPhone. Its lists stay saved for everyone else, and you can rejoin with an invite link.</p>
+      <div class="confirm-leave" id="confirm-leave" hidden>
+        <p>Leave “<span id="confirm-leave-name"></span>”?</p>
+        <div class="confirm-actions">
+          <button type="button" class="btn" id="confirm-leave-no">Keep</button>
+          <button type="button" class="btn destructive-fill" id="confirm-leave-yes">Leave</button>
+        </div>
+      </div>
     </form>
   </dialog>
 
