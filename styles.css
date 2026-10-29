@@ -20,6 +20,9 @@
   --shadow-2: 0 -8px 40px rgba(30, 10, 20, .18);
   --radius: 18px;
   --ease-out: cubic-bezier(.2, .9, .3, 1);
+  --ease-spring: cubic-bezier(.3, 1.35, .5, 1);
+  --ok-strong: #15803d;
+  --danger-strong: #c81e3a;
   --t-fast: 140ms;
   --t-med: 260ms;
   color-scheme: light dark;
@@ -42,6 +45,8 @@
     --me-soft: #3b1d2c;
     --partner: #c7d2fe;
     --partner-soft: #262845;
+    --ok-strong: #15803d;
+    --danger-strong: #be123c;
     --shadow-1: none;
     --shadow-2: 0 -8px 40px rgba(0, 0, 0, .5);
   }
@@ -212,7 +217,7 @@ main { padding: 4px 16px calc(env(safe-area-inset-bottom) + 104px); }
 /* Lists */
 .list { background: var(--card); border-radius: var(--radius); box-shadow: var(--shadow-1); overflow: hidden; }
 .item { display: flex; align-items: flex-start; gap: 4px; padding: 6px 8px 6px 4px; position: relative; }
-.item + .item::before { content: ""; position: absolute; top: 0; left: 52px; right: 0; border-top: 1px solid var(--line); }
+.item + .item::before, .swipe + .swipe .item::before { content: ""; position: absolute; top: 0; left: 52px; right: 0; border-top: 1px solid var(--line); }
 .check {
   flex: 0 0 auto; width: 48px; height: 48px; border: 0; background: none; padding: 0;
   display: grid; place-items: center;
@@ -348,6 +353,101 @@ main { padding: 4px 16px calc(env(safe-area-inset-bottom) + 104px); }
 .toast span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .toast button { border: 0; background: none; color: #f9a8d4; font-weight: 750; min-height: 44px; padding: 0 12px; border-radius: 10px; flex: 0 0 auto; }
 @media (prefers-color-scheme: dark) { .toast button { color: #be185d; } }
+
+/* ---------- Motion & gestures ---------- */
+
+/* Swipeable rows: the row slides over two coloured action panels */
+.swipe { position: relative; overflow: hidden; }
+.item { background: var(--card); transition: transform 280ms var(--ease-spring); will-change: transform; }
+.swipe-under {
+  position: absolute; inset: 0; display: flex; align-items: center; gap: 8px;
+  padding: 0 22px; font-weight: 700; font-size: .9375rem; color: #fff; opacity: 0;
+  transition: opacity var(--t-fast);
+}
+.swipe-under svg.i { width: 22px; height: 22px; transition: transform 220ms var(--ease-spring); }
+.done-side { background: var(--ok-strong); justify-content: flex-start; }
+.delete-side { background: var(--danger-strong); justify-content: flex-end; }
+.swipe[data-dir="right"] .done-side, .swipe[data-dir="left"] .delete-side { opacity: 1; }
+.swipe[data-armed="1"] .swipe-under svg.i { transform: scale(1.35); }
+
+/* Completing: ring fills, text is struck through, then the row folds away */
+.swipe.completing .item-text {
+  display: inline; color: var(--muted);
+  background: linear-gradient(currentColor, currentColor) 0 58% / 100% 2px no-repeat;
+  -webkit-box-decoration-break: clone; box-decoration-break: clone;
+  animation: strike 320ms var(--ease-out) both;
+  transition: color 200ms;
+}
+@keyframes strike { from { background-size: 0 2px; } }
+.check[aria-pressed="true"] .ring { animation: ring-pop 380ms var(--ease-spring); }
+@keyframes ring-pop { 40% { transform: scale(1.25); } }
+
+/* Rows arriving: staggered on first load, slide-in when new, glow when your partner added it */
+.stagger { animation: rise 420ms var(--ease-out) both; animation-delay: calc(var(--i, 0) * 40ms); }
+.enter { animation: drop-in 420ms var(--ease-spring) both; }
+.enter.fresh .item, .note.enter.fresh { animation: glow 2.2s ease-out; }
+@keyframes rise { from { opacity: 0; transform: translateY(14px); } }
+@keyframes drop-in { from { opacity: 0; transform: translateY(-10px) scale(.97); } }
+@keyframes glow { 0%, 30% { background: var(--partner-soft); } }
+
+/* Confetti pieces (positioned by script) */
+.confetti { position: fixed; z-index: 50; width: 8px; height: 10px; border-radius: 2px; pointer-events: none; }
+
+/* Tab bar: a soft pill grows behind the active icon, and the icon bounces */
+.tabbar button::before {
+  content: ""; position: absolute; top: 3px; left: 50%; width: 58px; height: 32px; margin-left: -29px;
+  border-radius: 16px; background: var(--primary-soft);
+  transform: scaleX(.3); opacity: 0;
+  transition: transform 320ms var(--ease-spring), opacity 200ms;
+}
+.tabbar button[aria-current="page"]::before { transform: scaleX(1); opacity: 1; }
+.tabbar svg.i { position: relative; }
+.tabbar button[aria-current="page"] svg.i { animation: tab-pop 420ms var(--ease-spring); }
+@keyframes tab-pop { 35% { transform: translateY(-3px) scale(1.15); } }
+.tabbar .badge { position: absolute; z-index: 1; }
+
+/* Sliding between tabs (View Transitions API) */
+#main { view-transition-name: page; }
+#view-title { view-transition-name: title; }
+::view-transition-old(root), ::view-transition-new(root) { animation: none; }
+::view-transition-old(page) { animation: vt-out-fwd 160ms ease-in both; }
+::view-transition-new(page) { animation: vt-in-fwd 320ms var(--ease-out) both; }
+html[data-nav="back"]::view-transition-old(page) { animation-name: vt-out-back; }
+html[data-nav="back"]::view-transition-new(page) { animation-name: vt-in-back; }
+::view-transition-old(title) { animation: fade-out 140ms ease-in both; }
+::view-transition-new(title) { animation: title-in 320ms var(--ease-out) both; }
+@keyframes vt-in-fwd { from { opacity: 0; transform: translateX(28px); } }
+@keyframes vt-out-fwd { to { opacity: 0; transform: translateX(-20px); } }
+@keyframes vt-in-back { from { opacity: 0; transform: translateX(-28px); } }
+@keyframes vt-out-back { to { opacity: 0; transform: translateX(20px); } }
+@keyframes fade-out { to { opacity: 0; } }
+@keyframes title-in { from { opacity: 0; transform: translateY(6px); } }
+
+/* Grocery basket progress */
+.basket {
+  background: var(--card); border-radius: var(--radius); box-shadow: var(--shadow-1);
+  padding: 14px 16px; margin-bottom: 4px; display: grid; gap: 10px;
+}
+.basket-text { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; flex-wrap: wrap; }
+.basket-text span { color: var(--muted); font-size: .8125rem; font-variant-numeric: tabular-nums; }
+.progress { height: 8px; border-radius: 4px; background: var(--fill); overflow: hidden; }
+.progress-fill {
+  height: 100%; border-radius: 4px; width: 0;
+  background: linear-gradient(90deg, var(--primary), var(--partner));
+  transition: width 700ms var(--ease-spring);
+}
+
+/* Snooze chips in the edit sheet */
+.snooze { margin-top: 10px; }
+
+/* Gentle life in empty states */
+.empty .empty-icon { animation: float 3.2s ease-in-out infinite; }
+@keyframes float { 50% { transform: translateY(-5px); } }
+
+/* Home tiles and cards spring a little when pressed */
+.stat, .note, .chip-btn, .btn { transition-timing-function: var(--ease-spring); }
+.toast.show { animation: toast-in 380ms var(--ease-spring); }
+@keyframes toast-in { from { transform: translate(-50%, 20px) scale(.92); opacity: 0; } }
 
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { animation-duration: 1ms !important; animation-iteration-count: 1 !important; transition-duration: 1ms !important; }

@@ -15,6 +15,11 @@ It runs in the browser and installs on the iPhone home screen like an app. There
 - **Undo** after deleting, clearing or checking something off (no "are you sure?" pop-ups)
 - Grocery box suggests things you've bought before
 - Sheets close by swiping down, tapping outside, or tapping ✕
+- **Swipe** a row right to complete it, left to delete it
+- Groceries are **sorted by aisle** (Fruit & veg, Dairy, Spices…) with a basket progress bar
+- A pop-up tells you when your partner adds something while the app is open
+- **Snooze** reminders in one tap (+1 hour, Tonight, Tomorrow, Next week)
+- Animations: confetti when you tick things off, a celebration when a list is finished, sliding tabs, count-up numbers. Light haptic taps on iOS 18+. All motion turns off with iPhone's Reduce Motion setting
 - Follows the iPhone's text size setting, big tap targets (44pt+), WCAG AA colour contrast, and Reduce Motion
 
 ## One-time setup (~10 minutes)

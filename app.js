@@ -40,6 +40,71 @@ function icon(name, cls = "i") {
   return span.firstChild;
 }
 
+// ---------- motion & feel ----------
+const reduceMotion = matchMedia("(prefers-reduced-motion: reduce)");
+const seen = new Set();   // item ids already shown, so only genuinely new ones animate in
+const prevCounts = {};    // last shown numbers, for count-ups and badge bumps
+const motion = { stagger: false, i: 0 };
+const wait = (ms) => new Promise((r) => setTimeout(r, ms));
+
+// iOS 18+ plays a haptic tick when a switch control toggles; borrow it for key taps.
+const hapticEl = (() => {
+  const label = document.createElement("label");
+  label.setAttribute("aria-hidden", "true");
+  label.style.cssText = "position:fixed;width:0;height:0;overflow:hidden;opacity:0;pointer-events:none";
+  const input = document.createElement("input");
+  input.type = "checkbox";
+  input.setAttribute("switch", "");
+  input.tabIndex = -1;
+  label.append(input);
+  document.body.append(label);
+  return label;
+})();
+function haptic() { try { hapticEl.click(); } catch {} }
+
+const CONFETTI = ["#ec4899", "#f59e0b", "#6366f1", "#10b981", "#38bdf8", "#f43f5e"];
+function burst(x, y, count = 12, power = 1) {
+  if (reduceMotion.matches) return;
+  for (let k = 0; k < count; k++) {
+    const p = document.createElement("i");
+    p.className = "confetti";
+    p.style.cssText = `left:${x}px;top:${y}px;background:${CONFETTI[k % CONFETTI.length]}`;
+    if (k % 3 === 0) p.style.borderRadius = "50%";
+    document.body.append(p);
+    const angle = Math.random() * Math.PI * 2, dist = (30 + Math.random() * 50) * power;
+    p.animate([
+      { transform: "translate(-50%, -50%) rotate(0deg) scale(1)", opacity: 1 },
+      { transform: `translate(calc(-50% + ${Math.cos(angle) * dist}px), calc(-50% + ${Math.sin(angle) * dist + 30 * power}px)) rotate(${Math.random() * 600}deg) scale(.5)`, opacity: 0 },
+    ], { duration: 650 + Math.random() * 450, easing: "cubic-bezier(.15,.8,.3,1)" }).onfinish = () => p.remove();
+  }
+}
+const celebrate = () => burst(innerWidth / 2, innerHeight * 0.4, 70, 3.2);
+
+// Shrink a row away before it leaves the list
+function collapse(el) {
+  if (reduceMotion.matches || !el.isConnected) return Promise.resolve();
+  return el.animate(
+    [{ height: `${el.offsetHeight}px`, opacity: 1 }, { height: "0px", opacity: 0 }],
+    { duration: 240, easing: "cubic-bezier(.4,0,.2,1)", fill: "forwards" },
+  ).finished;
+}
+
+// Numbers on Home roll up to their new value
+function rollNumbers() {
+  document.querySelectorAll("[data-count]").forEach((el) => {
+    const to = +el.dataset.count, key = el.dataset.key, from = prevCounts[key] ?? 0;
+    prevCounts[key] = to;
+    if (from === to || reduceMotion.matches) { el.textContent = to; return; }
+    const t0 = performance.now();
+    const step = (t) => {
+      const p = Math.min(1, (t - t0) / 550);
+      el.textContent = Math.round(from + (to - from) * (1 - (1 - p) ** 3));
+      if (p < 1) requestAnimationFrame(step);
+    };
+    requestAnimationFrame(step);
+  });
+}
+
 // ---------- small helpers ----------
 const $ = (sel) => document.querySelector(sel);
 const store = {
@@ -99,11 +164,13 @@ function toLocalInput(ms) {
 }
 const fromLocalInput = (v) => (v ? new Date(v).getTime() : null);
 
+const roundUp5 = (ms) => Math.ceil(ms / 300e3) * 300e3;
+
 // One-tap times for reminders, so nobody has to fight the date picker.
 function timePresets() {
   const now = new Date();
   const at = (days, hour) => { const d = new Date(now); d.setDate(d.getDate() + days); d.setHours(hour, 0, 0, 0); return d.getTime(); };
-  const out = [{ id: "hour", label: "In 1 hour", ms: Math.ceil((Date.now() + 3600e3) / 300e3) * 300e3 }];
+  const out = [{ id: "hour", label: "In 1 hour", ms: roundUp5(Date.now() + 3600e3) }];
   if (now.getHours() < 17) out.push({ id: "evening", label: "This evening", ms: at(0, 18) });
   out.push({ id: "tomorrow", label: "Tomorrow 9 AM", ms: at(1, 9) });
   const toSat = (6 - now.getDay() + 7) % 7 || 7;
@@ -256,7 +323,12 @@ async function start() {
   state.api.subscribeMembers((m) => { state.members = m; render(); });
   let offlineTimer;
   state.api.subscribeItems(
-    (items) => { state.items = items; state.loaded = true; render(); },
+    (items) => {
+      if (state.loaded) announcePartnerAdds(items);
+      state.items = items;
+      state.loaded = true;
+      render();
+    },
     (online) => {
       // Brief cache reads at startup are normal, so wait before calling it "offline"
       clearTimeout(offlineTimer);
@@ -264,6 +336,19 @@ async function start() {
       else offlineTimer = setTimeout(() => ($("#offline").hidden = false), 2500);
     }
   );
+}
+
+// When your partner adds something while the app is open, say so.
+function announcePartnerAdds(items) {
+  const known = new Set(state.items.map((i) => i.id));
+  const fresh = items.filter((i) => !known.has(i.id) && i.by && !isMe(i.by));
+  if (!fresh.length) return;
+  const first = fresh[0];
+  const what = fresh.length === 1
+    ? `“${first.text.length > 28 ? first.text.slice(0, 28) + "…" : first.text}”`
+    : `${fresh.length} things`;
+  haptic();
+  toast(`${first.by} added ${what}`, state.view === first.type ? null : { label: "View", run: () => go(first.type) });
 }
 
 // ---------- rendering ----------
@@ -287,23 +372,45 @@ function render({ full = false } = {}) {
     else b.removeAttribute("aria-current");
     const n = v === "home" || v === "note" ? 0 : openCount(v);
     const badge = b.querySelector(".badge");
-    if (badge) badge.textContent = n ? (n > 99 ? "99+" : n) : "";
+    if (badge) {
+      badge.textContent = n ? (n > 99 ? "99+" : n) : "";
+      const key = `badge-${v}`;
+      if (prevCounts[key] !== undefined && n > prevCounts[key] && !reduceMotion.matches) {
+        badge.animate([{ transform: "scale(1)" }, { transform: "scale(1.45)" }, { transform: "scale(1)" }],
+          { duration: 420, easing: "cubic-bezier(.3,1.6,.5,1)" });
+      }
+      prevCounts[key] = n;
+    }
     const label = b.querySelector("span").textContent;
     b.setAttribute("aria-label", n ? `${label}, ${n} open` : label);
   });
 
   // While someone is typing, only refresh the content below the composer
   // so their text, keyboard and cursor are never disturbed by a sync.
+  // The very first paint staggers rows in; after that only new rows animate.
+  motion.stagger = state.loaded && !motion.painted;
+  motion.i = 0;
   const content = $("#content");
   if (!full && content && document.activeElement?.closest?.(".composer")) {
     content.replaceChildren(...viewContent().filter(Boolean));
-    return;
+  } else {
+    $("#main").replaceChildren(...[
+      state.view === "home" && installHint(),
+      composer(state.view === "home" ? state.quickType : state.view, state.view === "home"),
+      h("div", { id: "content" }, viewContent()),
+    ].filter(Boolean));
   }
-  $("#main").replaceChildren(...[
-    state.view === "home" && installHint(),
-    composer(state.view === "home" ? state.quickType : state.view, state.view === "home"),
-    h("div", { id: "content" }, viewContent()),
-  ].filter(Boolean));
+  if (state.loaded) {
+    state.items.forEach((i) => seen.add(i.id));
+    motion.painted = true;
+  }
+  rollNumbers();
+}
+// How a row should arrive: staggered on first paint, sliding in when new, still otherwise.
+function arrival(item) {
+  if (seen.has(item.id)) return { cls: "", style: null };
+  if (motion.stagger) return { cls: " stagger", style: `--i:${Math.min(motion.i++, 12)}` };
+  return { cls: isMe(item.by) ? " enter" : " enter fresh", style: null };
 }
 const viewContent = () => (!state.loaded ? skeleton() : state.view === "home" ? homeContent() : listContent(state.view));
 const skeleton = () => [h("div", { class: "skeleton" }), h("div", { class: "skeleton" }), h("div", { class: "skeleton" })];
@@ -333,22 +440,78 @@ function itemRow(item) {
   meta.push(h("span", {}, ago(item.createdAt)));
   if (item.done && item.doneBy) meta.push(h("span", {}, `· done by ${isMe(item.doneBy) ? "you" : item.doneBy}`));
 
-  return h("div", { class: `item${item.done ? " is-done" : ""}` },
+  const { cls, style } = arrival(item);
+  const row = h("div", { class: `item${item.done ? " is-done" : ""}` },
     h("button", {
       class: "check",
       "aria-pressed": item.done ? "true" : "false",
       "aria-label": `${item.done ? "Mark not done" : "Mark done"}: ${item.text}`,
-      onclick: () => toggle(item),
+      onclick: (e) => toggle(item, e.currentTarget),
     }, h("span", { class: "ring" })),
     h("button", { class: "item-body", "aria-label": `Edit: ${item.text}`, onclick: () => openEdit(item) },
       h("div", { class: "item-text" }, item.text),
       h("div", { class: "meta" }, meta),
     ),
   );
+  // Swipe right to complete, left to delete (the circle and the edit sheet do the same)
+  const wrap = h("div", { class: `swipe${cls}`, style },
+    h("div", { class: "swipe-under done-side", "aria-hidden": "true" }, icon("task"), item.done ? "Not done" : "Done"),
+    h("div", { class: "swipe-under delete-side", "aria-hidden": "true" }, "Delete", icon("x")),
+    row);
+  attachSwipe(wrap, row, item);
+  return wrap;
+}
+
+function attachSwipe(wrap, row, item) {
+  const LIMIT = 90;
+  let x0 = 0, y0 = 0, dx = 0, mode = null; // mode: null until we know if it's a sideways swipe or a scroll
+  wrap.addEventListener("touchstart", (e) => {
+    if (e.touches.length !== 1) return;
+    x0 = e.touches[0].clientX; y0 = e.touches[0].clientY; dx = 0; mode = null;
+  }, { passive: true });
+  wrap.addEventListener("touchmove", (e) => {
+    const mx = e.touches[0].clientX - x0, my = e.touches[0].clientY - y0;
+    if (!mode) {
+      if (Math.abs(mx) > 12 && Math.abs(mx) > Math.abs(my) * 1.5) { mode = "x"; row.style.transition = "none"; }
+      else if (Math.abs(my) > 10) mode = "y";
+    }
+    if (mode !== "x") return;
+    e.preventDefault();
+    dx = mx;
+    const shown = Math.abs(dx) > LIMIT ? Math.sign(dx) * (LIMIT + (Math.abs(dx) - LIMIT) * 0.3) : dx;
+    row.style.transform = `translateX(${shown}px)`;
+    wrap.dataset.dir = dx > 0 ? "right" : "left";
+    const armed = Math.abs(dx) > LIMIT;
+    if (armed !== (wrap.dataset.armed === "1")) {
+      wrap.dataset.armed = armed ? "1" : "";
+      if (armed) haptic();
+    }
+  }, { passive: false });
+  const end = async () => {
+    if (mode !== "x") return;
+    mode = null;
+    row.style.transition = "";
+    wrap.dataset.armed = "";
+    if (dx > LIMIT) {
+      row.style.transform = "";
+      toggle(item, row.querySelector(".check"));
+    } else if (dx < -LIMIT) {
+      row.style.transform = "translateX(-105%)";
+      haptic();
+      await wait(160);
+      await collapse(wrap);
+      removeWithUndo([item], "Deleted");
+    } else {
+      row.style.transform = "";
+    }
+  };
+  wrap.addEventListener("touchend", end);
+  wrap.addEventListener("touchcancel", end);
 }
 
 function noteCard(item) {
-  return h("button", { class: "note", "aria-label": `Edit note: ${item.text.slice(0, 60)}`, onclick: () => openEdit(item) },
+  const { cls, style } = arrival(item);
+  return h("button", { class: `note${cls}`, style, "aria-label": `Edit note: ${item.text.slice(0, 60)}`, onclick: () => openEdit(item) },
     h("div", { class: "item-text" }, item.text),
     h("div", { class: "meta" }, byChip(item.by), h("span", {}, ago(item.createdAt))),
   );
@@ -445,6 +608,12 @@ function composer(type, onHome) {
     }
     text.value = state.drafts[type] = "";
     text.focus();
+    haptic();
+    if (!reduceMotion.matches) {
+      form.querySelector(".add-btn svg")?.animate(
+        [{ transform: "rotate(0) scale(1)" }, { transform: "rotate(90deg) scale(1.25)" }, { transform: "rotate(180deg) scale(1)" }],
+        { duration: 450, easing: "cubic-bezier(.3,1.4,.5,1)" });
+    }
     const where = onHome ? ` to ${TYPES[type].title}` : "";
     toast(texts.length > 1 ? `Added ${texts.length} items${where}` : `Added${where}`);
   });
@@ -458,6 +627,40 @@ function doneSection(type, done) {
       h("button", { class: "link-btn", onclick: () => removeWithUndo(done, `Cleared ${done.length} done`) }, "Clear all")),
     h("div", { class: "list" }, done.slice(-30).reverse().map(itemRow)),
   ];
+}
+
+// Aisles in the order you'd walk a typical shop. First match wins, so specific
+// words (chilli powder) are checked before broad ones (chilli).
+const AISLE_RULES = [
+  ["Spices & masala", /\b(masala|turmeric|haldi|jeera|cumin|mustard seed|spice|cardamom|elaichi|clove|cinnamon|hing|powder|garam|saffron|oregano|bay lea)/],
+  ["Dairy & eggs", /\b(milk|curd|yog|dahi|paneer|butter|ghee|cheese|cream|eggs?\b|buttermilk|lassi)/],
+  ["Bakery", /\b(bread|buns?\b|pav|cake|croissant|bagel|tortilla|roti|naan|muffin)/],
+  ["Meat & fish", /\b(chicken|mutton|fish|prawn|shrimp|meat|beef|pork|lamb|salmon|tuna|sausage|bacon)/],
+  ["Grains & staples", /\b(rice|atta|flour|maida|dal|lentil|chana|rajma|oats|poha|rava|suji|sugar|salt|jaggery|oil|pasta|noodle|cereal|besan|quinoa|sooji|vermicelli)/],
+  ["Fruit & veg", /\b(apple|banana|mango|orange|grape|lemon|lime|onion|tomato|potato|garlic|ginger|chil+i|coriander|cilantro|mint|spinach|palak|methi|carrot|cucumber|capsicum|pepper|beans|peas|cabbage|cauliflower|brinjal|eggplant|okra|bhindi|lettuce|avocado|berr|fruit|veg|curry lea|pumpkin|gourd|beet|radish|mushroom|corn|papaya|melon|pomegranate|guava|kiwi|pear|broccoli|zucchini|celery|herb)/],
+  ["Snacks & drinks", /\b(chips|snack|namkeen|chocolate|juice|soda|coke|tea|coffee|water|beer|wine|ice ?cream|nuts?\b|almond|cashew|biscuit|cookie|crackers?|popcorn)/],
+  ["Household", /\b(soap|detergent|shampoo|toothpaste|toothbrush|tissue|paper|cleaner|dish|bin bags?|garbage|sponge|diaper|wipes|batter(y|ies)|bulb|foil|cling|handwash|sanitizer|conditioner|lotion|razor)/],
+];
+const AISLES = [
+  ["Fruit & veg"], ["Bakery"], ["Dairy & eggs"], ["Meat & fish"], ["Grains & staples"],
+  ["Spices & masala"], ["Snacks & drinks"], ["Household"], ["Other"],
+];
+const aisleOf = (text) => AISLE_RULES.find(([, re]) => re.test(text.toLowerCase()))?.[0] ?? "Other";
+
+function basketProgress(total, got) {
+  const pct = total ? Math.round((got / total) * 100) : 0;
+  const bar = h("div", { class: "progress-fill" });
+  const box = h("div", { class: "basket", role: "progressbar", "aria-valuemin": 0, "aria-valuemax": total, "aria-valuenow": got, "aria-label": "Items in the basket" },
+    h("div", { class: "basket-text" },
+      h("strong", {}, got === total ? "Everything's in the basket" : `${total - got} left to buy`),
+      h("span", {}, `${got} of ${total} done`)),
+    h("div", { class: "progress" }, bar));
+  // Grow from the previous width to the new one
+  const key = "basket";
+  bar.style.width = `${prevCounts[key] ?? 0}%`;
+  requestAnimationFrame(() => requestAnimationFrame(() => (bar.style.width = `${pct}%`)));
+  prevCounts[key] = pct;
+  return box;
 }
 
 function listContent(type) {
@@ -483,6 +686,20 @@ function listContent(type) {
       out.push(h("div", { class: `section-title${label === "Overdue" ? " danger" : ""}` }, h("span", {}, label)));
       out.push(h("div", { class: "list" }, these.map(itemRow)));
     }
+  } else if (type === "grocery") {
+    out.push(basketProgress(items.length, done.length));
+    // Sort the open items by store aisle once the list is long enough to need it
+    const byAisle = new Map(AISLES.map(([name]) => [name, []]));
+    open.forEach((g) => byAisle.get(aisleOf(g.text)).push(g));
+    const used = [...byAisle].filter(([, list]) => list.length);
+    if (open.length >= 4 && used.length > 1) {
+      for (const [name, list] of used) {
+        out.push(h("div", { class: "section-title" }, h("span", {}, name)));
+        out.push(h("div", { class: "list" }, list.map(itemRow)));
+      }
+    } else if (open.length) {
+      out.push(h("div", { class: "list" }, open.map(itemRow)));
+    }
   } else if (open.length) {
     out.push(h("div", { class: "list" }, open.map(itemRow)));
   }
@@ -502,7 +719,9 @@ function homeContent() {
   const partner = partnerName();
 
   const stat = (type, label) => h("button", { class: "stat", onclick: () => go(type) },
-    h("span", { class: "stat-icon" }, icon(TYPES[type].icon)), h("b", {}, openCount(type)), h("span", {}, label));
+    h("span", { class: "stat-icon" }, icon(TYPES[type].icon)),
+    h("b", { "data-count": openCount(type), "data-key": `stat-${type}` }, String(prevCounts[`stat-${type}`] ?? 0)),
+    h("span", {}, label));
   const section = (title, action) => h("div", { class: "section-title" }, h("span", {}, title),
     action && h("button", { class: "link-btn", onclick: action.run }, action.label));
   const quiet = (text) => h("div", { class: "empty compact" }, text);
@@ -539,16 +758,50 @@ function homeContent() {
 }
 
 // ---------- actions ----------
+const VIEW_ORDER = ["home", "task", "reminder", "grocery", "note"];
 function go(view) {
-  state.view = view;
-  store.set("fb.view", view);
-  render();
-  scrollTo(0, 0);
+  if (view === state.view) { scrollTo({ top: 0, behavior: reduceMotion.matches ? "auto" : "smooth" }); return; }
+  haptic();
+  const swap = () => {
+    state.view = view;
+    store.set("fb.view", view);
+    render({ full: true });
+    scrollTo(0, 0);
+  };
+  // Slide between tabs in the direction of the tab bar (Safari 18+, Chrome); instant elsewhere
+  if (document.startViewTransition && !reduceMotion.matches) {
+    document.documentElement.dataset.nav = VIEW_ORDER.indexOf(view) > VIEW_ORDER.indexOf(state.view) ? "forward" : "back";
+    document.startViewTransition(swap);
+  } else {
+    swap();
+  }
 }
-function toggle(item) {
+const busy = new Set(); // items mid-animation, so a double tap can't toggle twice
+async function toggle(item, checkBtn) {
+  if (busy.has(item.id)) return;
   const done = !item.done;
-  state.api.update(item.id, { done, doneBy: done ? state.name : null }).catch(() => toast("Couldn't update"));
-  if (done) toast("Marked done", { label: "Undo", run: () => state.api.update(item.id, { done: false, doneBy: null }) });
+  const wrap = checkBtn?.closest(".swipe");
+  const lastOne = done && openCount(item.type) === 1;
+  haptic();
+  if (done && wrap && !reduceMotion.matches) {
+    busy.add(item.id);
+    // Fill the circle, pop a little confetti, strike the text, then fold the row away
+    checkBtn.setAttribute("aria-pressed", "true");
+    wrap.classList.add("completing");
+    const r = checkBtn.getBoundingClientRect();
+    burst(r.left + r.width / 2, r.top + r.height / 2, 10);
+    await wait(420);
+    await collapse(wrap);
+    busy.delete(item.id);
+  }
+  state.api.update(item.id, { done, doneBy: done ? state.name : null })
+    .catch(() => { toast("Couldn't update. Check your connection."); render({ full: true }); });
+  if (lastOne) {
+    celebrate();
+    toast(item.type === "grocery" ? "Shopping done! Everything's in the basket." : "All done. Nice teamwork!");
+  } else if (done) {
+    toast("Marked done", { label: "Undo", run: () => state.api.update(item.id, { done: false, doneBy: null }) });
+  }
 }
 // Deleting never needs a confirm dialog: an Undo button is faster and safer.
 function removeWithUndo(items, msg) {
@@ -598,12 +851,33 @@ let editing = null, editWho = "";
 function renderEditWho() {
   $("#edit-who").replaceChildren(...chipGroup("Who's doing it", whoOptions(), editWho, (v) => { editWho = v; renderEditWho(); }).children);
 }
+// One-tap "push it later" for reminders. Fills the date field; Save keeps it.
+function renderSnooze(due) {
+  const base = Math.max(Date.now(), due || 0);
+  const at = (days, hour) => { const d = new Date(); d.setDate(d.getDate() + days); d.setHours(hour, 0, 0, 0); return d.getTime(); };
+  const opts = [
+    { label: "+1 hour", ms: roundUp5(base + 3600e3) },
+    new Date().getHours() < 19 && { label: "Tonight 8 PM", ms: at(0, 20) },
+    { label: "Tomorrow 9 AM", ms: at(1, 9) },
+    { label: "Next week", ms: at(7, 9) },
+  ].filter(Boolean);
+  $("#edit-snooze").replaceChildren(...opts.map((o) => h("button", {
+    type: "button", class: "chip-btn", "aria-pressed": "false",
+    onclick: (e) => {
+      $("#edit-due").value = toLocalInput(o.ms);
+      $("#edit-snooze").querySelectorAll("button").forEach((b) => b.setAttribute("aria-pressed", String(b === e.currentTarget)));
+      haptic();
+    },
+  }, o.label)));
+}
+
 function openEdit(item) {
   editing = item;
   $("#edit-title").textContent = `Edit ${TYPES[item.type].one}`;
   $("#edit-text").value = item.text;
   $("#edit-due-wrap").hidden = item.type !== "reminder";
   $("#edit-due").value = toLocalInput(item.due);
+  if (item.type === "reminder") renderSnooze(item.due);
   $("#edit-who-wrap").hidden = item.type !== "task";
   editWho = item.for || "";
   renderEditWho();
