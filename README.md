@@ -10,6 +10,12 @@ It runs in the browser and installs on the iPhone home screen like an app. There
 - Reminders have a date and time, and turn orange when they're near and red when they're overdue
 - Groceries: type `milk, eggs, bread` to add three items at once
 - Light and dark mode
+- **Quick add from Home**: pick Task, Reminder, Grocery or Note and type
+- **One-tap reminder times**: In 1 hour, This evening, Tomorrow 9 AM, Saturday, or pick a date
+- **Undo** after deleting, clearing or checking something off (no "are you sure?" pop-ups)
+- Grocery box suggests things you've bought before
+- Sheets close by swiping down, tapping outside, or tapping ✕
+- Follows the iPhone's text size setting, big tap targets (44pt+), WCAG AA colour contrast, and Reduce Motion
 
 ## One-time setup (~10 minutes)
 
