@@ -558,6 +558,135 @@ html[data-nav="back"]::view-transition-new(page) { animation-name: vt-in-back; }
 @keyframes fade-out { to { opacity: 0; } }
 @keyframes title-in { from { opacity: 0; transform: translateY(6px); } }
 
+/* =====================================================================
+   Colour & atmosphere
+   Each section has its own gradient. The app's tint, titles, buttons and
+   the drifting aurora behind everything glide to the new colours when you
+   switch tabs. Text-bearing stops are checked: white on light-mode stops
+   and black on dark-mode stops are all >= 5:1.
+   ===================================================================== */
+@property --grad-a { syntax: "<color>"; inherits: true; initial-value: #c2185b; }
+@property --grad-b { syntax: "<color>"; inherits: true; initial-value: #7c3aed; }
+@property --blob-1 { syntax: "<color>"; inherits: true; initial-value: #ff5f9e; }
+@property --blob-2 { syntax: "<color>"; inherits: true; initial-value: #a78bfa; }
+@property --blob-3 { syntax: "<color>"; inherits: true; initial-value: #ffb86b; }
+
+:root {
+  --grad-a: #c2185b; --grad-b: #7c3aed;
+  --blob-1: #ff5f9e; --blob-2: #a78bfa; --blob-3: #ffb86b;
+  --aurora-opacity: .5;
+  --tint: var(--grad-a);
+  --on-tint: #ffffff;
+  --tint-soft: color-mix(in srgb, var(--tint) 11%, var(--card));
+  --me: #d30f45; --me-soft: #fdecf1;
+  --gradient: linear-gradient(135deg, var(--grad-a), var(--grad-b));
+  transition: --grad-a 600ms ease, --grad-b 600ms ease, --blob-1 900ms ease, --blob-2 900ms ease, --blob-3 900ms ease;
+}
+:root[data-view="task"]     { --grad-a: #d30f45; --grad-b: #c2410c; --blob-1: #ff5f8f; --blob-2: #ff9f5a; --blob-3: #ffd36b; }
+:root[data-view="reminder"] { --grad-a: #c2410c; --grad-b: #b91c1c; --blob-1: #ff9f43; --blob-2: #ff6b6b; --blob-3: #ffd166; }
+:root[data-view="grocery"]  { --grad-a: #15803d; --grad-b: #0f766e; --blob-1: #34d399; --blob-2: #2dd4bf; --blob-3: #a3e635; }
+:root[data-view="note"]     { --grad-a: #4f46e5; --grad-b: #7c3aed; --blob-1: #818cf8; --blob-2: #c084fc; --blob-3: #60a5fa; }
+@media (prefers-color-scheme: dark) {
+  :root { --grad-a: #ff6482; --grad-b: #c4b5fd; --on-tint: #000000; --aurora-opacity: .32; --me: #ff6482; --me-soft: #3a1621; }
+  :root[data-view="task"]     { --grad-a: #ff6482; --grad-b: #fdba74; }
+  :root[data-view="reminder"] { --grad-a: #fdba74; --grad-b: #fca5a5; }
+  :root[data-view="grocery"]  { --grad-a: #4ade80; --grad-b: #5eead4; }
+  :root[data-view="note"]     { --grad-a: #a5b4fc; --grad-b: #d8b4fe; }
+}
+
+/* The aurora: three soft colour fields drifting slowly behind the app */
+.aurora { position: fixed; inset: 0; z-index: 0; overflow: hidden; pointer-events: none; }
+.aurora i {
+  position: absolute; width: 110vmax; height: 110vmax; border-radius: 50%;
+  opacity: var(--aurora-opacity); will-change: transform;
+}
+.aurora i:nth-child(1) { top: -55vmax; left: -45vmax; background: radial-gradient(circle, var(--blob-1) 0%, transparent 62%); animation: drift-1 22s ease-in-out infinite alternate; }
+.aurora i:nth-child(2) { top: -60vmax; right: -55vmax; background: radial-gradient(circle, var(--blob-2) 0%, transparent 62%); animation: drift-2 26s ease-in-out infinite alternate; }
+.aurora i:nth-child(3) { top: -20vmax; left: -10vmax; width: 80vmax; height: 80vmax; background: radial-gradient(circle, var(--blob-3) 0%, transparent 62%); opacity: calc(var(--aurora-opacity) * .7); animation: drift-3 30s ease-in-out infinite alternate; }
+@keyframes drift-1 { to { transform: translate(18vmax, 10vmax) scale(1.15); } }
+@keyframes drift-2 { to { transform: translate(-16vmax, 14vmax) scale(.9); } }
+@keyframes drift-3 { 50% { transform: translate(14vmax, -6vmax) scale(1.2); } to { transform: translate(-8vmax, 8vmax) scale(.95); } }
+#setup, #app { position: relative; z-index: 1; }
+
+/* Titles: gradient text that slowly flows */
+.large-title h1, .setup h1 {
+  background: linear-gradient(100deg, var(--grad-a), var(--grad-b), var(--grad-a)) 0 0 / 200% 100%;
+  -webkit-background-clip: text; background-clip: text; color: transparent;
+  animation: title-flow 9s ease-in-out infinite alternate;
+}
+@keyframes title-flow { to { background-position: 100% 0; } }
+.eyebrow { color: var(--ink); opacity: .7; }
+
+/* Buttons that matter glow with the section gradient */
+.btn.primary, .add-btn, .chip-btn[aria-pressed="true"] {
+  background: var(--gradient); color: var(--on-tint);
+  box-shadow: 0 6px 18px -6px color-mix(in srgb, var(--grad-a) 70%, transparent);
+}
+.add-btn { box-shadow: 0 8px 20px -6px color-mix(in srgb, var(--grad-a) 80%, transparent); }
+.btn.primary:active, .add-btn:active { box-shadow: 0 2px 8px -4px color-mix(in srgb, var(--grad-a) 70%, transparent); }
+
+/* Composer gets a thin gradient edge */
+.composer {
+  border: 1.5px solid transparent;
+  background: linear-gradient(var(--card), var(--card)) padding-box,
+              linear-gradient(135deg, color-mix(in srgb, var(--grad-a) 55%, transparent), color-mix(in srgb, var(--grad-b) 55%, transparent)) border-box;
+  box-shadow: 0 10px 30px -18px color-mix(in srgb, var(--grad-a) 60%, transparent);
+}
+
+/* Home tiles: full-colour gradient cards with a big faded icon */
+.stat { position: relative; overflow: hidden; color: #fff; background: var(--tile-gradient); box-shadow: 0 10px 24px -14px var(--tile-a); }
+.stat[data-type="task"]     { --tile-a: #d30f45; --tile-gradient: linear-gradient(135deg, #e11d48, #d30f45 45%, #c2410c); }
+.stat[data-type="reminder"] { --tile-a: #c2410c; --tile-gradient: linear-gradient(135deg, #c2410c, #b91c1c); }
+.stat[data-type="grocery"]  { --tile-a: #15803d; --tile-gradient: linear-gradient(135deg, #15803d, #0f766e); }
+.stat[data-type="note"]     { --tile-a: #4f46e5; --tile-gradient: linear-gradient(135deg, #4f46e5, #7c3aed); }
+.stat .stat-icon { background: rgba(255, 255, 255, .22); }
+.stat b { color: #fff; }
+.stat .stat-label { color: #fff; }
+.stat:active { background: var(--tile-gradient); filter: brightness(.92); }
+.stat::after {               /* soft shine across the top */
+  content: ""; position: absolute; inset: 0;
+  background: radial-gradient(120% 80% at 0% 0%, rgba(255, 255, 255, .28), transparent 55%);
+  pointer-events: none;
+}
+.stat .stat-mark { position: absolute; right: -10px; bottom: -14px; width: 74px; height: 74px; opacity: .16; stroke-width: 1.6; pointer-events: none; }
+
+/* Done circles fill with the section gradient */
+.check[aria-pressed="true"] .ring { border-color: var(--grad-a); }
+.check[aria-pressed="true"] .ring::after { background: var(--gradient); }
+
+/* Tab bar: the selected tab takes the section colour */
+.tabbar button::before { background: color-mix(in srgb, var(--grad-a) 14%, transparent); }
+.tabbar button[aria-current="page"] { color: var(--grad-a); }
+
+/* People tags keep their own colours whatever the section */
+.chip.me { background: var(--me-soft); color: var(--me); }
+
+/* Shimmering basket progress */
+.progress-fill { background: linear-gradient(90deg, var(--grad-a), var(--grad-b), var(--grad-a)) 0 0 / 200% 100%; animation: flow 2.4s linear infinite; }
+@keyframes flow { to { background-position: -200% 0; } }
+
+/* Empty states: a floating gradient badge */
+.empty .empty-icon {
+  width: 72px; height: 72px; border-radius: 22px; display: inline-grid; place-items: center;
+  background: var(--gradient); color: #fff;
+  box-shadow: 0 12px 28px -12px var(--grad-a);
+}
+.empty .empty-icon svg.i { width: 34px; height: 34px; stroke-width: 1.8; }
+@media (prefers-color-scheme: dark) { .empty .empty-icon { color: #000; } }
+
+/* Welcome screen */
+.setup-logo { box-shadow: 0 18px 40px -16px #e9546e; animation: float 4s ease-in-out infinite; }
+.feature-icon { width: 44px; height: 44px; border-radius: 14px; color: #fff; background: linear-gradient(135deg, #e11d48, #c2410c); }
+.feature-icon.indigo { color: #fff; background: linear-gradient(135deg, #4f46e5, #7c3aed); }
+.feature-icon.green { color: #fff; background: linear-gradient(135deg, #15803d, #0f766e); }
+.feature-icon svg.i { width: 24px; height: 24px; stroke-width: 2; }
+
+@keyframes float { 50% { transform: translateY(-6px); } }
+.empty .empty-icon { animation: float 3.6s ease-in-out infinite; }
+
+/* Board monograms get a little depth */
+.board-mono { background-image: linear-gradient(160deg, rgba(255, 255, 255, .28), transparent 60%); }
+
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { animation-duration: 1ms !important; animation-iteration-count: 1 !important; transition-duration: 1ms !important; }
 }

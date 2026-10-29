@@ -468,6 +468,7 @@ function render({ full = false } = {}) {
   const title = state.view === "home" ? state.boardName : TYPES[state.view].title;
   $("#board-btn-name").textContent = state.boardName;
   $("#view-title").textContent = title;
+  document.documentElement.dataset.view = state.view; // drives the section colours
   $("#nav-title").textContent = title;
   document.querySelectorAll("#tabbar button").forEach((b) => {
     const v = b.dataset.view;
@@ -849,7 +850,8 @@ function homeContent() {
   const stat = (type, label) => h("button", { class: "stat", "data-type": type, "aria-label": `${label}: ${openCount(type)}`, onclick: () => go(type) },
     h("span", { class: "stat-icon" }, icon(TYPES[type].icon)),
     h("b", { "data-count": openCount(type), "data-key": `stat-${type}`, "aria-hidden": "true" }, String(prevCounts[`stat-${type}`] ?? 0)),
-    h("span", { class: "stat-label", "aria-hidden": "true" }, label));
+    h("span", { class: "stat-label", "aria-hidden": "true" }, label),
+    icon(TYPES[type].icon, "i stat-mark"));
   const section = (title, action) => h("div", { class: "section-title" }, h("span", {}, title),
     action && h("button", { class: "link-btn", onclick: action.run }, action.label));
   const quiet = (text) => h("div", { class: "empty compact" }, text);
@@ -1060,7 +1062,7 @@ function renderBoardList() {
       type: "button", class: "board-row", role: "listitem", "aria-current": current ? "true" : null,
       onclick: () => switchBoard(b.code),
     },
-      h("span", { class: "board-mono", style: `background:${boardColor(b.code)}`, "aria-hidden": "true" }, boardTitle(b)[0].toUpperCase()),
+      h("span", { class: "board-mono", style: `background-color:${boardColor(b.code)}`, "aria-hidden": "true" }, boardTitle(b)[0].toUpperCase()),
       h("span", { class: "board-row-text" },
         h("strong", {}, boardTitle(b)),
         h("span", {}, people.length > 1 ? people.join(", ") : "Just you so far")),
