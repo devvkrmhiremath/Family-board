@@ -1,0 +1,121 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>Family Board</title>
+  <meta name="description" content="Shared tasks, reminders, groceries and notes for the two of us.">
+  <meta name="theme-color" content="#f4f1ee" media="(prefers-color-scheme: light)">
+  <meta name="theme-color" content="#141214" media="(prefers-color-scheme: dark)">
+  <!-- iPhone "Add to Home Screen" support -->
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="default">
+  <meta name="apple-mobile-web-app-title" content="Family">
+  <link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+  <link rel="icon" type="image/png" href="icons/icon-192.png">
+  <link rel="manifest" href="manifest.webmanifest">
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <!-- First-run / not-configured screens -->
+  <section id="setup" class="setup" hidden>
+    <div class="setup-card">
+      <img src="icons/icon-192.png" alt="" class="setup-logo">
+      <h1>Family Board</h1>
+      <p class="muted">One shared place for tasks, reminders, groceries and notes.</p>
+
+      <div id="setup-noconfig" hidden>
+        <p class="warn">Almost there — add your Firebase settings to <code>config.js</code> (see README) and reload.</p>
+      </div>
+
+      <form id="setup-form" hidden>
+        <label>Your name
+          <input id="setup-name" autocomplete="given-name" placeholder="e.g. Vikram" required maxlength="30">
+        </label>
+        <div id="setup-join" hidden>
+          <p class="muted small">You're joining an existing board.</p>
+        </div>
+        <div id="setup-choose">
+          <label>Board code <span class="muted small">(leave empty to create a new board)</span>
+            <input id="setup-code" autocapitalize="off" autocorrect="off" spellcheck="false" placeholder="paste code from your partner">
+          </label>
+        </div>
+        <button class="btn primary" type="submit">Continue</button>
+      </form>
+    </div>
+  </section>
+
+  <div id="app" hidden>
+    <header class="topbar">
+      <div>
+        <p class="eyebrow" id="greeting">Hello</p>
+        <h1 id="view-title">Home</h1>
+      </div>
+      <div class="topbar-right">
+        <span id="sync" class="sync" title="Sync status"></span>
+        <button id="open-settings" class="icon-btn" aria-label="Settings">
+          <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68 1.65 1.65 0 0 0 10 3.17V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+        </button>
+      </div>
+    </header>
+
+    <main id="main"></main>
+
+    <nav class="tabbar" id="tabbar">
+      <button data-view="home"><svg viewBox="0 0 24 24"><path d="M3 10.5 12 3l9 7.5V20a1 1 0 0 1-1 1h-5v-6H9v6H4a1 1 0 0 1-1-1z"/></svg><span>Home</span></button>
+      <button data-view="task"><svg viewBox="0 0 24 24"><path d="M9 11l3 3 8-8"/><path d="M20 12v7a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h9"/></svg><span>Tasks</span><b class="badge" data-badge="task"></b></button>
+      <button data-view="reminder"><svg viewBox="0 0 24 24"><path d="M18 8a6 6 0 0 0-12 0c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.7 21a2 2 0 0 1-3.4 0"/></svg><span>Reminders</span><b class="badge" data-badge="reminder"></b></button>
+      <button data-view="grocery"><svg viewBox="0 0 24 24"><circle cx="9" cy="20" r="1.5"/><circle cx="18" cy="20" r="1.5"/><path d="M2 3h3l2.7 12.4a2 2 0 0 0 2 1.6h8.6a2 2 0 0 0 2-1.6L22 7H6"/></svg><span>Groceries</span><b class="badge" data-badge="grocery"></b></button>
+      <button data-view="note"><svg viewBox="0 0 24 24"><path d="M14 3H6a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9z"/><path d="M14 3v6h6M8 13h8M8 17h5"/></svg><span>Notes</span></button>
+    </nav>
+  </div>
+
+  <!-- Edit sheet -->
+  <dialog id="edit" class="sheet">
+    <form method="dialog" id="edit-form">
+      <h2 id="edit-title" tabindex="-1" autofocus>Edit</h2>
+      <label>Text
+        <textarea id="edit-text" rows="3" required maxlength="2000"></textarea>
+      </label>
+      <label id="edit-due-wrap">When
+        <input id="edit-due" type="datetime-local">
+      </label>
+      <label id="edit-who-wrap">For
+        <select id="edit-who"></select>
+      </label>
+      <p class="muted small" id="edit-meta"></p>
+      <div class="sheet-actions">
+        <button type="button" class="btn danger" id="edit-delete">Delete</button>
+        <span class="spacer"></span>
+        <button type="button" class="btn" id="edit-cancel">Cancel</button>
+        <button type="submit" class="btn primary">Save</button>
+      </div>
+    </form>
+  </dialog>
+
+  <!-- Settings sheet -->
+  <dialog id="settings" class="sheet">
+    <form method="dialog">
+      <h2 tabindex="-1" autofocus>Settings</h2>
+      <label>Your name
+        <input id="settings-name" maxlength="30">
+      </label>
+      <div class="invite">
+        <p class="small"><strong>Invite your partner</strong><br><span class="muted">Send them this link. They open it in Safari, enter their name, then Share → Add to Home Screen.</span></p>
+        <code id="settings-code"></code>
+        <button type="button" class="btn primary" id="share-invite">Share invite link</button>
+      </div>
+      <div class="sheet-actions">
+        <button type="button" class="btn danger" id="leave-board">Leave board</button>
+        <span class="spacer"></span>
+        <button type="submit" class="btn primary" id="settings-save">Done</button>
+      </div>
+    </form>
+  </dialog>
+
+  <div id="toast" class="toast" role="status" aria-live="polite"></div>
+
+  <script type="module" src="app.js"></script>
+</body>
+</html>
