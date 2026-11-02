@@ -2,11 +2,14 @@
 import { typeInfo } from "../core/constants.js";
 import { greeting } from "../core/time.js";
 import { qs, qsa, h } from "../ui/dom.js";
-import { rowPositions, slideRows, rollNumbers, setAurora, bump } from "../ui/motion.js";
+import { segmented } from "../ui/controls.js";
+import { rowPositions, slideRows, rollNumbers, bump } from "../ui/motion.js";
 import { state, seen, prevCounts, motionState, openCount } from "./state.js";
 import { composer } from "../views/composer.js";
 import { listContent } from "../views/lists.js";
 import { homeContent } from "../views/home.js";
+import { calendarContent, calendarStrip } from "../views/calendar.js";
+import { go } from "./actions.js";
 import { skeleton, lockedContent } from "../views/status.js";
 import { pruneRowCache } from "../views/rows.js";
 import { installHint } from "../features/install.js";
@@ -24,13 +27,13 @@ function updateChrome() {
   qs("#board-btn-name").textContent = state.boardName;
   qs("#view-title").textContent = title;
   qs("#nav-title").textContent = title;
-  document.documentElement.dataset.view = state.view; // drives the section colours
-  setAurora(state.view);
+  document.documentElement.dataset.view = state.view;
   for (const tab of qsa("#tabbar button")) {
     const view = tab.dataset.view;
-    if (view === state.view) tab.setAttribute("aria-current", "page");
+    // Reminders live inside the Calendar tab
+    if (view === state.view || (view === "event" && state.view === "reminder")) tab.setAttribute("aria-current", "page");
     else tab.removeAttribute("aria-current");
-    const n = view === "home" || view === "note" ? 0 : openCount(view);
+    const n = view === "home" || view === "note" ? 0 : openCount(view === "event" ? "reminder" : view);
     const badge = qs(".badge", tab);
     if (badge) {
       badge.textContent = n ? (n > 99 ? "99+" : n) : "";
@@ -39,14 +42,15 @@ function updateChrome() {
       prevCounts.set(key, n);
     }
     const label = qs("span", tab).textContent;
-    tab.setAttribute("aria-label", n ? `${label}, ${n} open` : label);
+    tab.setAttribute("aria-label", n ? `${label}, ${n} open ${view === "event" ? "reminders" : ""}`.trim() : label);
   }
 }
 
 function viewContent() {
   if (state.locked) return lockedContent(locked);
   if (!state.loaded) return skeleton();
-  return state.view === "home" ? homeContent() : listContent(state.view);
+  if (state.view === "home") return homeContent();
+  return state.view === "event" ? calendarContent() : listContent(state.view);
 }
 
 export function render({ full = false } = {}) {
@@ -62,8 +66,12 @@ export function render({ full = false } = {}) {
   if (!full && content && document.activeElement?.closest?.(".composer")) {
     content.replaceChildren(...viewContent().filter(Boolean));
   } else {
+    const calendarTab = state.view === "event" || state.view === "reminder";
     qs("#main").replaceChildren(...[
       state.view === "home" && installHint(),
+      calendarTab && h("div", { class: "view-switch" }, segmented("Calendar or reminders",
+        [{ value: "event", label: "Calendar" }, { value: "reminder", label: "Reminders" }], state.view, (v) => go(v))),
+      state.view === "event" && state.loaded && !state.locked && calendarStrip(),
       !state.locked && composer(state.view === "home" ? state.quickType : state.view, state.view === "home"),
       h("div", { id: "content" }, viewContent()),
     ].filter(Boolean));

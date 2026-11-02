@@ -8,7 +8,9 @@ import { toast } from "../ui/toast.js";
 import { haptic } from "../ui/motion.js";
 import { openSheet, closeSheet } from "../ui/sheets.js";
 import { state } from "../app/state.js";
-import { nameOf, isMe, whoPicker, whoValue } from "../app/people.js";
+import { nameOf, isMe, whoPicker, whoValue, peoplePicker, busyPicker } from "../app/people.js";
+import { peopleOf, dateValue, fromDateTime, lastMoment, localSpan, utcDay } from "../core/calendar.js";
+import { exportEvents, busyTitle } from "../views/calendar.js";
 import { removeWithUndo, forgetRow } from "../app/actions.js";
 
 const sheet = () => qs("#edit");
@@ -16,6 +18,44 @@ let editing = null;
 let editWho = "";
 let editQty = 1;
 let editPhoto; // undefined: unchanged, null: removed, { full, thumb }: new
+let editPeople = [];
+
+function renderPeople() {
+  const busy = !!editing?.busy;
+  qs("#edit-people-label").textContent = busy ? "Who's busy" : "Who's going";
+  qs("#edit-people").replaceChildren(busy
+    ? busyPicker(editPeople[0] || "", (v) => { editPeople = [v]; renderPeople(); })
+    : peoplePicker(editPeople, (v) => { editPeople = v; renderPeople(); }));
+}
+
+// All-day events edit dates; timed events edit dates and times
+function setAllDay(on, { start, end } = {}) {
+  const s = qs("#edit-start");
+  const e = qs("#edit-end");
+  const startMs = start ?? (s.type === "date" ? fromDateTime(s.value) : fromLocalInput(s.value));
+  const endMs = end ?? (e.type === "date" ? fromDateTime(e.value) : fromLocalInput(e.value));
+  qs("#edit-allday").checked = on;
+  s.type = on ? "date" : "datetime-local";
+  e.type = on ? "date" : "datetime-local";
+  s.value = startMs == null ? "" : on ? dateValue(startMs) : toLocalInput(startMs);
+  e.value = endMs == null ? "" : on ? dateValue(endMs) : toLocalInput(endMs);
+}
+// The sheet's start and end as they are stored: exact moments for timed events,
+// zone-free dates for all-day ones
+function eventTimes() {
+  const allDay = qs("#edit-allday").checked;
+  const read = (el) => (allDay ? fromDateTime(el.value) : fromLocalInput(el.value));
+  const due = read(qs("#edit-start"));
+  let end = read(qs("#edit-end"));
+  if (due == null) return { due, end: null, allDay };
+  if (allDay) {
+    if (end == null || end < due) end = due;
+    return { due: utcDay(due), end: utcDay(end), allDay };
+  }
+  // A timed event always lasts a while: an hour unless the end is later
+  if (end == null || end <= due) end = due + 36e5;
+  return { due, end, allDay };
+}
 
 function renderWho() {
   qs("#edit-who").replaceChildren(whoPicker(editWho, (v) => { editWho = v; renderWho(); }));
@@ -57,7 +97,8 @@ function setQty(n) {
 export function openEdit(item) {
   editing = item;
   editPhoto = undefined;
-  const noun = capitalise(typeInfo(item.type).one);
+  const noun = item.busy ? "Busy Time" : capitalise(typeInfo(item.type).one);
+  const event = item.type === "event";
   const timed = item.type === "reminder" || item.type === "task";
   qs("#edit-title").textContent = `Edit ${noun}`;
   qs("#edit-delete").textContent = `Delete ${noun}`;
@@ -69,7 +110,22 @@ export function openEdit(item) {
   qs("#edit-due-label").textContent = item.type === "task" ? "Due" : "Date & time";
   qs("#edit-due").value = toLocalInput(item.due);
   if (timed) renderQuickDates(item.due);
-  qs("#edit-repeat-wrap").hidden = !timed;
+  qs("#edit-repeat-wrap").hidden = !timed && !event;
+  qs("#edit-repeat-note").textContent = event
+    ? "Shows on the calendar every time it comes round. Changes apply to every one."
+    : "When you tick it off, the next one is added for you.";
+  qs("#edit-event-wrap").hidden = !event;
+  qs("#edit-event-more").hidden = !event;
+  qs("#edit-event-error").textContent = "";
+  if (event) {
+    qs("#edit-allday").checked = false;
+    qs("#edit-start").type = "datetime-local";
+    qs("#edit-end").type = "datetime-local";
+    const span = localSpan(item);
+    setAllDay(!!item.allDay, { start: span.due, end: item.allDay ? (span.end ?? span.due) : lastMoment(item) });
+    editPeople = peopleOf(item);
+    renderPeople();
+  }
   qs("#edit-repeat").value = REPEATS.has(item.repeat) ? item.repeat : "";
   qs("#edit-who-wrap").hidden = item.type !== "task";
   editWho = whoValue(item.for || "");
@@ -102,6 +158,17 @@ function save(e) {
     if (patch.repeat && !patch.due) patch.due = nextDue(Date.now() - DAY, patch.repeat);
   }
   if (item.type === "task") patch.for = editWho || null;
+  if (item.type === "event") {
+    const { due, end, allDay } = eventTimes();
+    if (due == null) { qs("#edit-event-error").textContent = "Pick when it starts."; return; }
+    const repeat = qs("#edit-repeat").value;
+    Object.assign(patch, {
+      due, end, allDay, repeat: REPEATS.has(repeat) ? repeat : null,
+      people: editPeople.filter(Boolean).length ? editPeople.filter(Boolean) : null,
+    });
+    // Moved back into the future: it's no longer over
+    if (item.done && (end ?? due) > Date.now()) Object.assign(patch, { done: false, doneAt: null, doneBy: null });
+  }
   if (item.type === "note" && editPhoto !== undefined) {
     if (editPhoto) {
       patch.thumb = editPhoto.thumb;
@@ -138,6 +205,23 @@ export function initEditSheet() {
   qs("#edit-photo-remove").addEventListener("click", () => { editPhoto = null; showPhoto(null); });
   qs("#edit-photo-view").addEventListener("click", () => openViewer(qs("#edit-photo-img").src));
   qs("#edit-form").addEventListener("submit", save);
+  qs("#edit-allday").addEventListener("change", (e) => setAllDay(e.target.checked));
+  qs("#edit-start").addEventListener("change", () => {
+    // Keep the end after the start
+    const allDay = qs("#edit-allday").checked;
+    const read = (el) => (allDay ? fromDateTime(el.value) : fromLocalInput(el.value));
+    const due = read(qs("#edit-start"));
+    const end = read(qs("#edit-end"));
+    if (due != null && (end == null || end < due || (!allDay && end === due))) setAllDay(allDay, { start: due, end: due + (allDay ? 0 : 36e5) });
+  });
+  qs("#edit-ics").addEventListener("click", () => {
+    if (!editing) return;
+    const { due, end, allDay } = eventTimes();
+    const text = qs("#edit-text").value.trim() || editing.text;
+    const copy = { ...editing, text, due: due ?? editing.due, end, allDay, people: editPeople, repeat: qs("#edit-repeat").value || null };
+    const name = (editing.busy ? busyTitle(copy) : text).toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "").slice(0, 40) || "event";
+    exportEvents([copy], `${name}.ics`);
+  });
   qs("#edit-delete").addEventListener("click", () => {
     if (!editing) return;
     closeSheet(sheet());

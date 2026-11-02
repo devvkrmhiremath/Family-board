@@ -32,6 +32,7 @@
   <link rel="modulepreload" href="src/app/session.js">
   <link rel="modulepreload" href="src/app/setup.js">
   <link rel="modulepreload" href="src/app/state.js">
+  <link rel="modulepreload" href="src/core/calendar.js">
   <link rel="modulepreload" href="src/core/constants.js">
   <link rel="modulepreload" href="src/core/groceries.js">
   <link rel="modulepreload" href="src/core/ids.js">
@@ -46,6 +47,7 @@
   <link rel="modulepreload" href="src/features/backup.js">
   <link rel="modulepreload" href="src/features/boards-sheet.js">
   <link rel="modulepreload" href="src/features/edit-sheet.js">
+  <link rel="modulepreload" href="src/features/ics.js">
   <link rel="modulepreload" href="src/features/install.js">
   <link rel="modulepreload" href="src/features/invites.js">
   <link rel="modulepreload" href="src/features/lifecycle.js">
@@ -58,6 +60,7 @@
   <link rel="modulepreload" href="src/ui/motion.js">
   <link rel="modulepreload" href="src/ui/sheets.js">
   <link rel="modulepreload" href="src/ui/toast.js">
+  <link rel="modulepreload" href="src/views/calendar.js">
   <link rel="modulepreload" href="src/views/composer.js">
   <link rel="modulepreload" href="src/views/home.js">
   <link rel="modulepreload" href="src/views/lists.js">
@@ -68,10 +71,6 @@
   <link rel="modulepreload" href="vendor/firebase/13.1.0/firebase-auth.js">
 </head>
 <body>
-  <!-- Drifting colour fields behind the whole app -->
-  <div class="aurora" aria-hidden="true"><i></i><i></i></div>
-  <div class="aurora out" aria-hidden="true"><i></i><i></i></div>
-
   <!-- Welcome screen (iOS onboarding pattern: icon, title, three features, one button) -->
   <section id="setup" class="setup" hidden>
     <div class="setup-card">
@@ -166,7 +165,7 @@
       <div class="tabbar-inner">
         <button data-view="home"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 10.5 12 3l9 7.5V20a1 1 0 0 1-1 1h-5v-6H9v6H4a1 1 0 0 1-1-1z"/></svg><span>Home</span></button>
         <button data-view="task"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="m9 11 3 3 8-8"/><path d="M20 12v7a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h9"/></svg><span>Tasks</span><b class="badge" data-badge="task" aria-hidden="true"></b></button>
-        <button data-view="reminder"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M18 8a6 6 0 0 0-12 0c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.7 21a2 2 0 0 1-3.4 0"/></svg><span>Reminders</span><b class="badge" data-badge="reminder" aria-hidden="true"></b></button>
+        <button data-view="event"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="4" width="18" height="17" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/></svg><span>Calendar</span><b class="badge" data-badge="event" aria-hidden="true"></b></button>
         <button data-view="grocery"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><circle cx="9" cy="20" r="1.5"/><circle cx="18" cy="20" r="1.5"/><path d="M2 3h3l2.7 12.4a2 2 0 0 0 2 1.6h8.6a2 2 0 0 0 2-1.6L22 7H6"/></svg><span>Groceries</span><b class="badge" data-badge="grocery" aria-hidden="true"></b></button>
         <button data-view="note"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M14 3H6a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9z"/><path d="M14 3v6h6M8 13h8M8 17h5"/></svg><span>Notes</span></button>
       </div>
@@ -207,6 +206,16 @@
         <div class="chips snooze" id="edit-snooze" role="group" aria-label="Quick dates"></div>
       </div>
 
+      <div id="edit-event-wrap" class="edit-block">
+        <p class="group-header">When</p>
+        <div class="group">
+          <label class="field-row" for="edit-allday"><span>All-day</span><input type="checkbox" id="edit-allday" class="switch" role="switch"></label>
+          <label class="field-row" for="edit-start"><span>Starts</span><input id="edit-start" class="cell-input" type="datetime-local"></label>
+          <label class="field-row" for="edit-end"><span>Ends</span><input id="edit-end" class="cell-input" type="datetime-local"></label>
+        </div>
+        <p class="field-error" id="edit-event-error" role="alert"></p>
+      </div>
+
       <div id="edit-repeat-wrap" class="edit-block">
         <label class="group-header" for="edit-repeat">Repeat</label>
         <div class="group">
@@ -219,7 +228,19 @@
             <option value="yearly">Every year</option>
           </select>
         </div>
-        <p class="group-footer">When you tick it off, the next one is added for you.</p>
+        <p class="group-footer" id="edit-repeat-note">When you tick it off, the next one is added for you.</p>
+      </div>
+
+      <div id="edit-event-more" class="edit-block">
+        <p class="group-header" id="edit-people-label">Who's going</p>
+        <div id="edit-people"></div>
+        <div class="group edit-ics">
+          <button type="button" class="cell-btn" id="edit-ics">
+            <svg class="i" viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="4" width="18" height="17" rx="2"/><path d="M16 2v4M8 2v4M3 10h18M12 13v5M9.5 15.5h5"/></svg>
+            Add to My Calendar
+          </button>
+        </div>
+        <p class="group-footer">Adds a copy to your phone's Calendar app. Changes made here later won't update it.</p>
       </div>
 
       <div id="edit-who-wrap" class="edit-block">

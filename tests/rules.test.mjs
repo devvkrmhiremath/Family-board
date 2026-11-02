@@ -57,6 +57,18 @@ await t('other member can tick it off', assertSucceeds(updateDoc(doc(own, 'famil
 await t('cannot change who added an item', assertFails(updateDoc(doc(own, 'families', B, 'items', 'i1'), { by: 'owner' })));
 await t('member can delete', assertSucceeds(deleteDoc(doc(own, 'families', B, 'items', 'i7'))));
 
+console.log('-- calendar events');
+const ev = (extra = {}) => item('priya', { type: 'event', text: 'Dinner at Mum\'s', due: Date.now(), end: Date.now() + 36e5, ...extra });
+await t('member adds an event', assertSucceeds(setDoc(doc(pr, 'families', B, 'items', 'e1'), ev({ people: ['priya', 'owner'], repeat: 'yearly' }))));
+await t('member blocks out busy time', assertSucceeds(setDoc(doc(pr, 'families', B, 'items', 'e2'), ev({ text: 'Busy', busy: true, people: ['priya'] }))));
+await t('all-day event accepted', assertSucceeds(setDoc(doc(pr, 'families', B, 'items', 'e3'), ev({ allDay: true }))));
+await t('event without a start refused', assertFails(setDoc(doc(pr, 'families', B, 'items', 'e4'), item('priya', { type: 'event', text: 'When?' }))));
+await t('event ending before it starts refused', assertFails(setDoc(doc(pr, 'families', B, 'items', 'e5'), ev({ end: Date.now() - 36e5 }))));
+await t('people must be a list', assertFails(setDoc(doc(pr, 'families', B, 'items', 'e6'), ev({ people: 'everyone' }))));
+await t('people list is capped', assertFails(setDoc(doc(pr, 'families', B, 'items', 'e7'), ev({ people: Array.from({ length: 51 }, (_, i) => `p${i}`) }))));
+await t('all-day must be true or false', assertFails(setDoc(doc(pr, 'families', B, 'items', 'e8'), ev({ allDay: 'yes' }))));
+await t('other member can move an event', assertSucceeds(updateDoc(doc(own, 'families', B, 'items', 'e1'), { due: Date.now() + 864e5, end: Date.now() + 864e5 + 36e5 })));
+
 console.log('-- photos & meta');
 const JPEG = 'data:image/jpeg;base64,';
 await t('member stores a photo', assertSucceeds(setDoc(doc(pr, 'families', B, 'photos', 'i1'), { data: JPEG + 'A'.repeat(100000), by: 'priya' })));

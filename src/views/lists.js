@@ -96,7 +96,7 @@ export function listContent(type) {
     out.push(...oftenBought(open), ...groceryAisles(open));
   } else if (open.length) out.push(rowsList(open, true));
   if (!open.length && items.length) {
-    out.push(h("div", { class: "empty" }, h("div", { class: "empty-icon" }, icon("sparkle")), h("h3", {}, "All done"), h("p", {}, "Nice teamwork.")));
+    out.push(h("div", { class: "empty" }, h("div", { class: "empty-icon" }, icon("check")), h("h3", {}, "All Done"), h("p", {}, "Everything on this list is ticked off.")));
   }
   if (done.length) out.push(...doneSection(done));
   return out;

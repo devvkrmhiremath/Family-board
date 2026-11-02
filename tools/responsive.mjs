@@ -33,6 +33,12 @@ const seed = () => {
   items.push({ id: "t1", type: "task", text: "Renew passport before the trip next month", by: "priya", for: me, due: t + 2 * 864e5, done: false, order: t, createdAt: t - 864e5 });
   items.push({ id: "t2", type: "task", text: "Pay rent", by: me, repeat: "monthly", due: t + 5 * 864e5, done: false, order: t + 1, createdAt: t - 9e5 });
   items.push({ id: "r1", type: "reminder", text: "Car service", by: "priya", due: t + 3 * 36e5, done: false, createdAt: t - 7e5 });
+  const day = new Date(); day.setHours(0, 0, 0, 0); const d0 = day.getTime(), H = 36e5;
+  items.push({ id: "e1", type: "event", text: "Dinner at Mum's", by: "priya", due: d0 + 19.5 * H, end: d0 + 21.5 * H, done: false, createdAt: t - 8e5 });
+  items.push({ id: "e2", type: "event", text: "Busy", busy: true, people: [me], by: me, due: d0 + 19 * H, end: d0 + 20 * H, done: false, createdAt: t - 8e5 });
+  const u0 = Date.UTC(day.getFullYear(), day.getMonth(), day.getDate()); // all-day events store UTC dates
+  items.push({ id: "e3", type: "event", text: "Goa trip", allDay: true, by: me, due: u0 + 3 * 864e5, end: u0 + 6 * 864e5, done: false, createdAt: t - 8e5 });
+  items.push({ id: "e4", type: "event", text: "Swimming class", people: ["priya"], repeat: "weekly", by: "priya", due: d0 + 864e5 + 17 * H, end: d0 + 864e5 + 18 * H, done: false, createdAt: t - 9e5 });
   items.push({ id: "n1", type: "note", text: "Wifi: sunshine42", by: "priya", done: false, createdAt: t - 5e5 });
   Object.assign(localStorage, {
     "fb.demo": "1", "fb.demo.uid": me, "fb.name": "Vikram", "fb.family": code, "fb.hint.install": "0", "fb.safari": "1",
@@ -73,8 +79,9 @@ for (const [label, width, height, touch, kind] of SIZES) {
       if (r.small.length) issues.push(`${where}: small targets ${r.small.join(", ")}`);
       if (r.covered) issues.push(`${where}: last rows hidden under the tab bar`);
     };
-    for (const view of ["home", "task", "reminder", "grocery", "note"]) {
-      await page.click(`#tabbar [data-view=${view}]`);
+    for (const view of ["home", "task", "event", "reminder", "grocery", "note"]) {
+      if (view === "reminder") await page.click(".view-switch button:has-text('Reminders')");
+      else await page.click(`#tabbar [data-view=${view}]`);
       await page.waitForTimeout(450);
       await check(view);
     }

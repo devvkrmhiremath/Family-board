@@ -22,6 +22,10 @@ const SHAPES = new Map([
   ["camera", [path("M3 8a2 2 0 0 1 2-2h2l2-2h6l2 2h2a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"), circle(12, 13, 3.5)]],
   ["lock", [rect(5, 11, 14, 10, 2), path("M8 11V7a4 4 0 0 1 8 0v4")]],
   ["download", [path("M12 3v12M7 10l5 5 5-5M5 19h14")]],
+  ["left", [path("m15 18-6-6 6-6")]],
+  ["right", [path("m9 18 6-6-6-6")]],
+  ["users", [path("M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"), circle(9, 7, 4), path("M23 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75")]],
+  ["alert", [path("M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z"), path("M12 9v4M12 17h.01")]],
   ["menu", [circle(12, 5, 1), circle(12, 12, 1), circle(12, 19, 1)]],
 ]);
 

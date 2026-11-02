@@ -6,6 +6,10 @@ export const TYPES = new Map([
     title: "Tasks", short: "Task", one: "task", placeholder: "Add a task", icon: "task",
     empty: ["No tasks yet", "Add one above, choose who's doing it and, if you like, a date."],
   }],
+  ["event", {
+    title: "Calendar", short: "Event", one: "event", placeholder: "Add an event", icon: "calendar",
+    empty: ["Nothing planned", "Add an event, or block out time when you're busy, so everyone knows."],
+  }],
   ["reminder", {
     title: "Reminders", short: "Reminder", one: "reminder", placeholder: "Remind us to…", icon: "bell",
     empty: ["No reminders", "Add one above and tap a time."],
@@ -30,11 +34,13 @@ export const REPEATS = new Map([
   ["yearly", "Every year"],
 ]);
 
-export const VIEW_ORDER = ["home", "task", "reminder", "grocery", "note"];
+export const VIEW_ORDER = ["home", "task", "event", "reminder", "grocery", "note"];
+// Types the Home quick-add offers (events have their own composer on Calendar)
+export const QUICK_TYPES = ["task", "reminder", "grocery", "note"];
 export const isView = (view) => VIEW_ORDER.includes(view);
 
 export const DEFAULT_BOARD_NAME = "Our Home";
 export const KEEP_DAY_OPTIONS = [7, 30, 90, 0]; // 0 = keep forever
 
 // Limits shared with firestore.rules (the server enforces them too)
-export const LIMITS = Object.freeze({ text: 2000, name: 30, boardName: 40, qty: 999, importItems: 1000 });
+export const LIMITS = Object.freeze({ text: 2000, name: 30, boardName: 40, qty: 999, importItems: 1000, people: 50 });

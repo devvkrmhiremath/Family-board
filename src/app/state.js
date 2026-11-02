@@ -35,6 +35,8 @@ export const state = {
   repeat: new Map([["reminder", ""], ["task", ""]]),
   who: "",
   notePhoto: null,      // { full, thumb } waiting to be added with a new note
+  calDay: null,         // the day picked on the Calendar (local midnight); null = today
+  eventDraft: null,     // the Calendar add box's choices (see views/calendar.js)
 };
 
 export const prevCounts = new Map(); // last numbers shown, for count-ups and badge bumps

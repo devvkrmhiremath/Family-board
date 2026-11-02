@@ -2,11 +2,12 @@
 import { typeInfo, VIEW_ORDER, LIMITS } from "../core/constants.js";
 import { store } from "../core/store.js";
 import { fmtDue, nextDue, DAY } from "../core/time.js";
+import { isPast, lastMoment } from "../core/calendar.js";
 import { parseQty, capitalise } from "../core/groceries.js";
 import { reduceMotion } from "../core/platform.js";
 import { qs } from "../ui/dom.js";
 import { toast } from "../ui/toast.js";
-import { haptic, burst, celebrate, wait, slideIn } from "../ui/motion.js";
+import { haptic, wait, slideIn } from "../ui/motion.js";
 import { pushLayer, popLayer } from "../ui/history.js";
 import { state, openCount, itemsOf, orderOf } from "./state.js";
 import { hooks } from "./hooks.js";
@@ -48,12 +49,10 @@ export async function toggle(item, checkBtn) {
   haptic();
   if (done && wrap && !reduceMotion.matches) {
     busy.add(item.id);
-    // Fill the circle, pop a little confetti and strike the text; then the row
-    // slides down into Done while the rows below glide up
+    // Fill the circle and strike the text; then the row slides down into Done
+    // while the rows below glide up
     checkBtn.setAttribute("aria-pressed", "true");
     wrap.classList.add("completing");
-    const r = checkBtn.getBoundingClientRect();
-    burst(r.left + r.width / 2, r.top + r.height / 2, 10);
     await wait(380);
     busy.delete(item.id);
   }
@@ -79,7 +78,6 @@ export async function toggle(item, checkBtn) {
     },
   };
   if (lastOne) {
-    celebrate();
     toast(item.type === "grocery" ? "Shopping done! Everything's in the basket." : "All done. Nice teamwork!");
   } else if (nextId) {
     toast(`Done. Next one: ${fmtDue(nextDueAt)}`, undo);
@@ -173,6 +171,30 @@ export function addItem(type, text, { due = null, repeat = "", who = "", photo =
   return id;
 }
 
+// Add a calendar event or a block of busy time
+export function addEvent({ text, start, end, allDay = false, busy: isBusy = false, people = [], repeat = "" }) {
+  const item = { type: "event", text: text.slice(0, LIMITS.text), done: false, due: start };
+  if (end != null && end >= start) item.end = end;
+  if (allDay) item.allDay = true;
+  if (isBusy) item.busy = true;
+  if (people.length) item.people = people.slice(0, LIMITS.people);
+  if (repeat) item.repeat = repeat;
+  const { id, saved } = state.api.add(item);
+  saved.catch(offlineNote);
+  return id;
+}
+
+// One-off events that are over get ticked off, so the board's "keep ticked
+// items" setting tidies them away like everything else
+export function tidyPastEvents() {
+  if (!state.api) return;
+  for (const item of state.items) {
+    if (!isPast(item) || state.pending.has(item.id)) continue;
+    forgetRow(item.id);
+    state.api.update(item.id, { done: true, doneAt: lastMoment(item) }).catch(() => { /* next time */ });
+  }
+}
+
 // Save a dragged item's new position
 export function moveItem(item, order) {
   item.order = order; // show it straight away; the sync confirms it
@@ -188,8 +210,8 @@ export const forgetRow = (id) => forget(id);
 export const addPulse = (form) => {
   if (reduceMotion.matches) return;
   qs(".add-btn svg", form)?.animate(
-    [{ transform: "rotate(0) scale(1)" }, { transform: "rotate(90deg) scale(1.25)" }, { transform: "rotate(180deg) scale(1)" }],
-    { duration: 450, easing: "cubic-bezier(.3,1.4,.5,1)" });
+    [{ transform: "scale(1)" }, { transform: "scale(.82)" }, { transform: "scale(1)" }],
+    { duration: 260, easing: "cubic-bezier(.3,1.2,.5,1)" });
 };
 
 export const typeTitle = (type) => typeInfo(type)?.title ?? "";

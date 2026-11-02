@@ -9,7 +9,7 @@ import { getService, SetupError } from "../data/service.js";
 import { localBoards } from "../data/local-boards.js";
 import { state, demo, boardTitle, resetBoardState } from "./state.js";
 import { nameOf, isMe } from "./people.js";
-import { flushDeletes, resetTabLayer, go } from "./actions.js";
+import { flushDeletes, resetTabLayer, go, tidyPastEvents } from "./actions.js";
 import { hooks } from "./hooks.js";
 import { clearRowCache } from "../views/rows.js";
 
@@ -94,6 +94,7 @@ function subscribe(code, api) {
     (items) => {
       if (state.loaded) announceOthersAdds(items);
       state.items = items;
+      if (!state.loaded) setTimeout(tidyPastEvents, 1500);
       state.loaded = true;
       hooks.scheduleRender();
     },

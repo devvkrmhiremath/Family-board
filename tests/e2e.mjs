@@ -94,7 +94,8 @@ await L.goto(link); await L.fill('#setup-name', 'Late'); await L.click('#setup-s
 ok('stopped invite link no longer works', await waitText(L, '#content', /invite link has expired/i));
 
 console.log('-- repeat, search, quantities');
-await V.click('#tabbar [data-view=reminder]'); await V.waitForTimeout(400);
+await V.click('#tabbar [data-view=event]'); await V.waitForTimeout(400);
+await V.click(".view-switch button:has-text('Reminders')"); await V.waitForTimeout(500);
 await V.fill('.composer input', 'Water plants');
 await V.selectOption('.composer .chip-select select', 'weekly'); await V.waitForTimeout(300);
 await V.click('.composer .add-btn'); await V.waitForTimeout(700);
@@ -107,6 +108,20 @@ ok('adding something already on the list raises its quantity', await waitText(V,
 await V.click('#open-search'); await V.waitForTimeout(300); await V.fill('#search-input', 'passp');
 ok('search finds the task', await waitText(V, '#search-results', /Renew passport/));
 await V.click('#search [data-close]'); await V.waitForTimeout(300);
+
+console.log('-- shared calendar');
+await V.click('#tabbar [data-view=event]'); await V.waitForTimeout(500);
+await V.click(".composer .segmented button:has-text('Busy Time')"); await V.waitForTimeout(300);
+await V.fill('.event-times input >> nth=0', '18:00'); await V.dispatchEvent('.event-times input >> nth=0', 'change');
+await V.fill('.event-times input >> nth=1', '20:00'); await V.dispatchEvent('.event-times input >> nth=1', 'change');
+await V.fill('.composer input', 'Office party'); await V.click('.composer .add-btn'); await V.waitForTimeout(700);
+await P.click('#tabbar [data-view=event]'); await P.waitForTimeout(500);
+ok('Priya sees Vikram\'s busy time live', await waitText(P, '#content', /Vikram · Busy · Office party/));
+await P.fill('.composer input', 'Dinner with the Shahs');
+await P.fill('.event-times input >> nth=0', '19:00'); await P.dispatchEvent('.event-times input >> nth=0', 'change');
+await P.click('.composer .add-btn'); await P.waitForTimeout(700);
+ok('Priya is warned it clashes', await waitText(P, '#content', /Clashes with Vikram's busy time/));
+ok('Vikram sees the event and the clash', await waitText(V, '#content', /Dinner with the Shahs[\s\S]*Clashes with/));
 
 console.log('-- drag to reorder');
 await V.click('#tabbar [data-view=grocery]'); await V.waitForTimeout(500);

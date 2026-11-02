@@ -1,5 +1,5 @@
-// Motion and feel: haptics, confetti, rows sliding into place, count-ups and the
-// tab slide. Everything animates transform/opacity only (GPU work) and switches
+// Motion and feel: haptics, rows sliding into place, count-ups and the tab
+// slide. Kept quiet and purposeful, as in Apple's own apps. Everything animates transform/opacity only (GPU work) and switches
 // off with the device's Reduce Motion setting.
 import { qs, qsa } from "./dom.js";
 import { reduceMotion, isAndroid } from "../core/platform.js";
@@ -24,26 +24,6 @@ export function haptic() {
   }
   try { hapticSwitch.click(); } catch { /* no haptics on this device */ }
 }
-
-const CONFETTI = ["#ec4899", "#f59e0b", "#6366f1", "#10b981", "#38bdf8", "#f43f5e"];
-export function burst(x, y, count = 12, power = 1) {
-  if (reduceMotion.matches) return;
-  for (let k = 0; k < count; k++) {
-    const piece = document.createElement("i");
-    piece.className = k % 3 === 0 ? "confetti round" : "confetti";
-    piece.style.left = `${x}px`;
-    piece.style.top = `${y}px`;
-    piece.style.background = CONFETTI.at(k % CONFETTI.length);
-    document.body.append(piece);
-    const angle = Math.random() * Math.PI * 2;
-    const dist = (30 + Math.random() * 50) * power;
-    piece.animate([
-      { transform: "translate(-50%, -50%) rotate(0deg) scale(1)", opacity: 1 },
-      { transform: `translate(calc(-50% + ${Math.cos(angle) * dist}px), calc(-50% + ${Math.sin(angle) * dist + 30 * power}px)) rotate(${Math.random() * 600}deg) scale(.5)`, opacity: 0 },
-    ], { duration: 650 + Math.random() * 450, easing: "cubic-bezier(.15,.8,.3,1)" }).onfinish = () => piece.remove();
-  }
-}
-export const celebrate = () => burst(innerWidth / 2, innerHeight * 0.4, 70, 3.2);
 
 // Rows slide to their new place when the list changes (FLIP: record where each row
 // was, re-render, then animate from the old spot). Only rows in sections on or near
@@ -104,27 +84,14 @@ export function rollNumbers(prev) {
 // The new screen slides in from the side of the tab you tapped
 export function slideIn(forward) {
   if (reduceMotion.matches) return;
-  const dx = forward ? 48 : -48;
+  const dx = forward ? 16 : -16;
   const easing = "cubic-bezier(.2,.9,.25,1)";
-  qs("#main").animate([{ transform: `translateX(${dx}px)`, opacity: 0 }, { transform: "none", opacity: 1 }], { duration: 340, easing });
-  qs(".large-title").animate([{ transform: `translateX(${dx * 0.6}px)`, opacity: 0 }, { transform: "none", opacity: 1 }], { duration: 300, easing });
-}
-
-// Crossfade the background colours to a section's palette: the new colours are
-// painted once on the hidden layer, which then fades in (GPU-only).
-export function setAurora(view) {
-  const [a, b] = qsa(".aurora");
-  const shown = a.classList.contains("out") ? b : a;
-  if (shown.dataset.palette === view) return;
-  if (!shown.dataset.palette) { shown.dataset.palette = view; return; } // first paint: no fade
-  const next = shown === a ? b : a;
-  next.dataset.palette = view;
-  next.classList.remove("out");
-  shown.classList.add("out");
+  qs("#main").animate([{ transform: `translateX(${dx}px)`, opacity: 0 }, { transform: "none", opacity: 1 }], { duration: 260, easing });
+  qs(".large-title").animate([{ transform: `translateX(${dx * 0.6}px)`, opacity: 0 }, { transform: "none", opacity: 1 }], { duration: 240, easing });
 }
 
 export function bump(el) {
   if (reduceMotion.matches) return;
-  el.animate([{ transform: "scale(1)" }, { transform: "scale(1.45)" }, { transform: "scale(1)" }],
-    { duration: 420, easing: "cubic-bezier(.3,1.6,.5,1)" });
+  el.animate([{ transform: "scale(1)" }, { transform: "scale(1.25)" }, { transform: "scale(1)" }],
+    { duration: 360, easing: "cubic-bezier(.3,1.3,.5,1)" });
 }
