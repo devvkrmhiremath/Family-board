@@ -1,0 +1,28 @@
+# GitHub code scanning for JavaScript security issues
+name: CodeQL
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  schedule:
+    - cron: "41 5 * * 3"
+
+permissions:
+  contents: read
+  security-events: write
+
+jobs:
+  analyze:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: github/codeql-action/init@v3
+        with:
+          languages: javascript
+          queries: security-extended
+          config: |
+            paths-ignore:
+              - vendor
+              - node_modules
+      - uses: github/codeql-action/analyze@v3

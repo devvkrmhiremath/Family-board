@@ -1,7 +1,7 @@
 // Performance test: node tools/perf.js [label]   (serve the app first: python3 -m http.server 8765)
 // Loads ~300 items in demo mode with a 4x CPU slowdown (roughly a phone) and reports fps,
 // stutters, paint/layout/style/script time and long tasks for common interactions.
-const { chromium, devices } = require('playwright');
+import { chromium, devices } from 'playwright';
 const OUT = process.argv[2] || 'run';
 (async () => {
   const b = await chromium.launch({ args: ['--enable-gpu-rasterization'] });
@@ -17,14 +17,18 @@ const OUT = process.argv[2] || 'run';
     const code = 'perf-perf-perf-perf-perf';
     const t = Date.now(), items = [];
     const groceries = ['Onions','Tomatoes','Milk','Paneer','Bread','Rice','Atta','Dal','Coriander','Ginger','Garlic','Eggs','Curd','Butter','Apples','Bananas','Tea','Coffee','Soap','Detergent'];
-    for (let i = 0; i < 150; i++) items.push({ id: 'g' + i, type: 'grocery', text: groceries[i % 20] + (i >= 20 ? ' ' + i : ''), by: i % 2 ? 'Priya' : 'Vikram', done: i % 3 === 0, createdAt: t - i * 6e4 });
-    for (let i = 0; i < 80; i++) items.push({ id: 't' + i, type: 'task', text: 'Task number ' + i + ' with a slightly longer description', by: i % 2 ? 'Priya' : 'Vikram', for: i % 3 ? 'Vikram' : undefined, done: i % 4 === 0, createdAt: t - i * 9e4 });
-    for (let i = 0; i < 50; i++) items.push({ id: 'r' + i, type: 'reminder', text: 'Reminder ' + i, by: 'Priya', due: t + (i - 10) * 36e5, done: i % 5 === 0, createdAt: t - i * 1e5 });
-    for (let i = 0; i < 20; i++) items.push({ id: 'n' + i, type: 'note', text: 'Note ' + i + '\nSecond line of the note', by: 'Vikram', done: false, createdAt: t - i * 2e5 });
-    localStorage['fb.name'] = 'Vikram'; localStorage['fb.family'] = code; localStorage['fb.demo'] = '1';
-    localStorage['fb.boards'] = JSON.stringify([{ code, name: 'Our Home', members: ['Vikram', 'Priya'] }]);
-    localStorage['fb.hint.install'] = '0';
-    localStorage['fb.demo.' + code] = JSON.stringify({ name: 'Our Home', members: ['Vikram', 'Priya'], items });
+    for (let i = 0; i < 150; i++) items.push({ id: `g${i}`, type: 'grocery', text: groceries[i % 20] + (i >= 20 ? ` ${i}` : ''), by: i % 2 ? 'Priya' : 'Vikram', done: i % 3 === 0, createdAt: t - i * 6e4 });
+    for (let i = 0; i < 80; i++) items.push({ id: `t${i}`, type: 'task', text: `Task number ${i} with a slightly longer description`, by: i % 2 ? 'Priya' : 'Vikram', for: i % 3 ? 'Vikram' : undefined, done: i % 4 === 0, createdAt: t - i * 9e4 });
+    for (let i = 0; i < 50; i++) items.push({ id: `r${i}`, type: 'reminder', text: `Reminder ${i}`, by: 'Priya', due: t + (i - 10) * 36e5, done: i % 5 === 0, createdAt: t - i * 1e5 });
+    for (let i = 0; i < 20; i++) items.push({ id: `n${i}`, type: 'note', text: `Note ${i}\nSecond line of the note`, by: 'Vikram', done: false, createdAt: t - i * 2e5 });
+    const boards = [{ code, name: 'Our Home', members: ['Vikram', 'Priya'] }];
+    const board = { name: 'Our Home', members: ['Vikram', 'Priya'], items };
+    localStorage.setItem('fb.name', 'Vikram');
+    localStorage.setItem('fb.family', code);
+    localStorage.setItem('fb.demo', '1');
+    localStorage.setItem('fb.hint.install', '0');
+    localStorage.setItem('fb.boards', JSON.stringify(boards));
+    localStorage.setItem(`fb.demo.${code}`, JSON.stringify(board));
   });
   await cdp.send('Emulation.setCPUThrottlingRate', { rate: 4 });
 
@@ -40,7 +44,7 @@ const OUT = process.argv[2] || 'run';
   async function measure(name, action, ms = 2500) {
     await p.evaluate(() => {
       window.__f = []; window.__long = 0; window.__run = true;
-      try { new PerformanceObserver((l) => l.getEntries().forEach(e => window.__long += e.duration)).observe({ type: 'longtask' }); } catch {}
+      try { new PerformanceObserver((l) => l.getEntries().forEach(e => window.__long += e.duration)).observe({ type: 'longtask' }); } catch { /* not supported */ }
       let last = performance.now();
       const loop = (t) => { window.__f.push(t - last); last = t; if (window.__run) requestAnimationFrame(loop); };
       requestAnimationFrame(loop);
@@ -58,7 +62,7 @@ const OUT = process.argv[2] || 'run';
     const f = await p.evaluate(() => { window.__run = false; return { f: window.__f.slice(1), long: window.__long }; });
     const sum = (n) => events.filter(e => e.name === n && e.ph === 'X').reduce((a, e) => a + (e.dur || 0), 0) / 1000;
     const count = (n) => events.filter(e => e.name === n).length;
-    const frames = f.f, secs = frames.reduce((a, b) => a + b, 0) / 1000;
+    const frames = f.f, secs = frames.reduce((sum2, x) => sum2 + x, 0) / 1000;
     return {
       scenario: name,
       fps: +(frames.length / secs).toFixed(1),

@@ -3,8 +3,9 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="color-scheme" content="light dark">
   <title>Family Board</title>
-  <meta name="description" content="Shared tasks, reminders, groceries and notes for the two of us.">
+  <meta name="description" content="Shared tasks, reminders, groceries and notes for families and friends.">
   <meta name="theme-color" content="#f2f2f7" media="(prefers-color-scheme: light)">
   <meta name="theme-color" content="#000000" media="(prefers-color-scheme: dark)">
   <!-- iPhone "Add to Home Screen" support -->
@@ -13,14 +14,58 @@
   <meta name="apple-mobile-web-app-status-bar-style" content="default">
   <meta name="apple-mobile-web-app-title" content="Family">
   <meta name="format-detection" content="telephone=no">
+  <meta name="referrer" content="no-referrer">
+  <!-- Only this site's own code runs. Network access is limited to Firebase (and
+       Google reCAPTCHA, used only if App Check is turned on in config.js). -->
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' https://www.google.com/recaptcha/ https://www.gstatic.com/recaptcha/; style-src 'self'; img-src 'self' data: blob:; font-src 'self'; connect-src 'self' https://firestore.googleapis.com https://identitytoolkit.googleapis.com https://securetoken.googleapis.com https://firebaseinstallations.googleapis.com https://content-firebaseappcheck.googleapis.com https://www.google.com/recaptcha/; frame-src https://www.google.com/recaptcha/; worker-src 'self'; manifest-src 'self'; media-src 'none'; object-src 'none'; base-uri 'none'; form-action 'self'; upgrade-insecure-requests">
   <link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
   <link rel="icon" type="image/png" href="icons/icon-192.png">
   <link rel="manifest" href="manifest.webmanifest">
   <link rel="stylesheet" href="styles.css">
-  <!-- Start fetching the database code and connection while the app itself loads -->
+  <!-- Start fetching the database code (served from this site) while the app loads -->
   <link rel="preconnect" href="https://firestore.googleapis.com" crossorigin>
-  <link rel="modulepreload" href="https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js">
-  <link rel="modulepreload" href="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js">
+  <!-- Fetch every app module in parallel instead of one import level at a time -->
+  <link rel="modulepreload" href="src/app/actions.js">
+  <link rel="modulepreload" href="src/app/hooks.js">
+  <link rel="modulepreload" href="src/app/people.js">
+  <link rel="modulepreload" href="src/app/render.js">
+  <link rel="modulepreload" href="src/app/session.js">
+  <link rel="modulepreload" href="src/app/setup.js">
+  <link rel="modulepreload" href="src/app/state.js">
+  <link rel="modulepreload" href="src/core/constants.js">
+  <link rel="modulepreload" href="src/core/groceries.js">
+  <link rel="modulepreload" href="src/core/ids.js">
+  <link rel="modulepreload" href="src/core/photo.js">
+  <link rel="modulepreload" href="src/core/platform.js">
+  <link rel="modulepreload" href="src/core/store.js">
+  <link rel="modulepreload" href="src/core/time.js">
+  <link rel="modulepreload" href="src/data/demo.js">
+  <link rel="modulepreload" href="src/data/firebase.js">
+  <link rel="modulepreload" href="src/data/local-boards.js">
+  <link rel="modulepreload" href="src/data/service.js">
+  <link rel="modulepreload" href="src/features/backup.js">
+  <link rel="modulepreload" href="src/features/boards-sheet.js">
+  <link rel="modulepreload" href="src/features/edit-sheet.js">
+  <link rel="modulepreload" href="src/features/install.js">
+  <link rel="modulepreload" href="src/features/invites.js">
+  <link rel="modulepreload" href="src/features/lifecycle.js">
+  <link rel="modulepreload" href="src/features/search-sheet.js">
+  <link rel="modulepreload" href="src/features/settings-sheet.js">
+  <link rel="modulepreload" href="src/ui/controls.js">
+  <link rel="modulepreload" href="src/ui/dom.js">
+  <link rel="modulepreload" href="src/ui/history.js">
+  <link rel="modulepreload" href="src/ui/icons.js">
+  <link rel="modulepreload" href="src/ui/motion.js">
+  <link rel="modulepreload" href="src/ui/sheets.js">
+  <link rel="modulepreload" href="src/ui/toast.js">
+  <link rel="modulepreload" href="src/views/composer.js">
+  <link rel="modulepreload" href="src/views/home.js">
+  <link rel="modulepreload" href="src/views/lists.js">
+  <link rel="modulepreload" href="src/views/rows.js">
+  <link rel="modulepreload" href="src/views/status.js">
+  <link rel="modulepreload" href="vendor/firebase/13.1.0/firebase-app.js">
+  <link rel="modulepreload" href="vendor/firebase/13.1.0/firebase-firestore.js">
+  <link rel="modulepreload" href="vendor/firebase/13.1.0/firebase-auth.js">
 </head>
 <body>
   <!-- Drifting colour fields behind the whole app -->
@@ -32,27 +77,40 @@
     <div class="setup-card">
       <div class="setup-hero">
         <img src="icons/icon-192.png" alt="" class="setup-logo" width="88" height="88">
-        <h1>Welcome to<br>Family Board</h1>
+        <h1 id="setup-title">Welcome to<br>Family Board</h1>
       </div>
 
-      <ul class="features">
+      <ul class="features" id="setup-features">
         <li>
           <span class="feature-icon tint"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="m9 11 3 3 8-8"/><path d="M20 12v7a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h9"/></svg></span>
           <div><strong>Shared lists</strong><p>Tasks, reminders, groceries and notes in one place.</p></div>
         </li>
         <li>
           <span class="feature-icon indigo"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75"/></svg></span>
-          <div><strong>Always in sync</strong><p>Anything one of you adds shows up on the other phone in seconds.</p></div>
+          <div><strong>Always in sync</strong><p>Anything anyone adds shows up on every phone in seconds.</p></div>
         </li>
         <li>
-          <span class="feature-icon green"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12.5 10 17 19 7"/></svg></span>
-          <div><strong>Who did what</strong><p>See who added each thing and who ticked it off.</p></div>
+          <span class="feature-icon green"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg></span>
+          <div><strong>Private to your people</strong><p>Only people you invite can see a board. Invite links expire after 7 days.</p></div>
         </li>
       </ul>
+
+      <!-- iPhone: install first, so the Home Screen app is the one that joins -->
+      <div id="setup-install" class="tip install-first" hidden>
+        <p><strong>First, add Family Board to your Home Screen</strong></p>
+        <ol>
+          <li>Tap <svg class="i inline" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v13M7 8l5-5 5 5M5 13v6a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-6"/></svg> <strong>Share</strong> at the bottom of Safari.</li>
+          <li>Choose <strong>Add to Home Screen</strong>, then <strong>Add</strong>.</li>
+          <li>Open <strong>Family Board</strong> from your Home Screen to finish.</li>
+        </ol>
+        <button type="button" class="link-btn" id="setup-skip-install">Use it in Safari instead</button>
+      </div>
 
       <div id="setup-noconfig" class="tip" hidden>
         <p>Almost there: add your Firebase settings to <code>config.js</code> (see the README) and reload. Or <a href="?demo">try the demo</a>, which saves on this device only.</p>
       </div>
+
+      <div id="setup-problem" class="tip problem" role="alert" hidden></div>
 
       <form id="setup-form" hidden novalidate>
         <label class="group-header" for="setup-name">Your name</label>
@@ -61,16 +119,16 @@
         </div>
         <p class="group-footer" id="setup-name-help">Shown next to everything you add.</p>
 
-        <p id="setup-join" class="group-footer join-note" hidden>You're joining your partner's board.</p>
+        <p id="setup-join" class="group-footer join-note" hidden>You've been invited to a board.</p>
         <div id="setup-choose">
-          <label class="group-header" for="setup-code">Board code (optional)</label>
+          <label class="group-header" for="setup-code">Invite link (optional)</label>
           <div class="group">
-            <input id="setup-code" class="cell-input" autocapitalize="off" autocorrect="off" spellcheck="false" enterkeyhint="go" placeholder="Paste invite link or code" aria-describedby="setup-code-help">
+            <input id="setup-code" class="cell-input" autocapitalize="off" autocorrect="off" spellcheck="false" enterkeyhint="go" placeholder="Paste an invite link" aria-describedby="setup-code-help">
           </div>
-          <p class="group-footer" id="setup-code-help">Leave this empty to start a new board.</p>
+          <p class="group-footer" id="setup-code-help">Leave this empty to start your own board.</p>
         </div>
         <p class="field-error" id="setup-error" role="alert"></p>
-        <button class="btn primary large block" type="submit">Continue</button>
+        <button class="btn primary large block" type="submit" id="setup-submit">Continue</button>
       </form>
     </div>
   </section>
@@ -88,7 +146,10 @@
       <span class="nav-title" id="nav-title" aria-hidden="true">Our Home</span>
       <span class="nav-side right">
         <span id="offline" class="offline-pill" role="status" hidden>Offline</span>
-        <button id="open-settings" class="icon-btn tint" aria-label="Board settings and invite">
+        <button id="open-search" class="icon-btn tint" aria-label="Search this board" aria-haspopup="dialog">
+          <svg class="i" viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
+        </button>
+        <button id="open-settings" class="icon-btn tint" aria-label="Board settings and people" aria-haspopup="dialog">
           <svg class="i" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="10"/><circle cx="12" cy="10" r="3.2"/><path d="M6.2 18.4a7 7 0 0 1 11.6 0"/></svg>
         </button>
       </span>
@@ -100,7 +161,7 @@
 
     <main id="main"></main>
 
-    <!-- Floating tab bar -->
+    <!-- Tab bar (a sidebar on iPad and wide screens) -->
     <nav class="tabbar" id="tabbar" aria-label="Sections">
       <div class="tabbar-inner">
         <button data-view="home"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 10.5 12 3l9 7.5V20a1 1 0 0 1-1 1h-5v-6H9v6H4a1 1 0 0 1-1-1z"/></svg><span>Home</span></button>
@@ -126,23 +187,88 @@
       </div>
       <p class="group-footer" id="edit-meta"></p>
 
-      <div id="edit-due-wrap">
-        <label class="group-header" for="edit-due">Date &amp; time</label>
-        <div class="group">
-          <input id="edit-due" class="cell-input" type="datetime-local">
+      <div id="edit-qty-wrap" class="edit-block">
+        <p class="group-header" id="edit-qty-label">Quantity</p>
+        <div class="group stepper-row" role="group" aria-labelledby="edit-qty-label">
+          <span class="stepper-value" id="edit-qty" aria-live="polite">1</span>
+          <div class="stepper">
+            <button type="button" id="qty-minus" aria-label="One less">−</button>
+            <button type="button" id="qty-plus" aria-label="One more">+</button>
+          </div>
         </div>
-        <div class="chips snooze" id="edit-snooze" role="group" aria-label="Quick snooze"></div>
       </div>
 
-      <div id="edit-who-wrap">
+      <div id="edit-due-wrap" class="edit-block">
+        <label class="group-header" for="edit-due" id="edit-due-label">Date &amp; time</label>
+        <div class="group due-row">
+          <input id="edit-due" class="cell-input" type="datetime-local">
+          <button type="button" class="link-btn clear-due" id="edit-due-clear">Clear</button>
+        </div>
+        <div class="chips snooze" id="edit-snooze" role="group" aria-label="Quick dates"></div>
+      </div>
+
+      <div id="edit-repeat-wrap" class="edit-block">
+        <label class="group-header" for="edit-repeat">Repeat</label>
+        <div class="group">
+          <select id="edit-repeat" class="cell-input select">
+            <option value="">Never</option>
+            <option value="daily">Every day</option>
+            <option value="weekdays">Weekdays</option>
+            <option value="weekly">Every week</option>
+            <option value="monthly">Every month</option>
+            <option value="yearly">Every year</option>
+          </select>
+        </div>
+        <p class="group-footer">When you tick it off, the next one is added for you.</p>
+      </div>
+
+      <div id="edit-who-wrap" class="edit-block">
         <p class="group-header" id="edit-who-label">Who's doing it</p>
         <div id="edit-who"></div>
+      </div>
+
+      <div id="edit-photo-wrap" class="edit-block">
+        <p class="group-header">Photo</p>
+        <div class="group photo-cell">
+          <button type="button" id="edit-photo-view" class="photo-preview" aria-label="View photo full screen" hidden><img id="edit-photo-img" alt="Photo attached to this note"></button>
+          <label class="cell-btn file-btn">
+            <svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 8a2 2 0 0 1 2-2h2l2-2h6l2 2h2a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><circle cx="12" cy="13" r="3.5"/></svg>
+            <span id="edit-photo-add-label">Add Photo</span>
+            <input type="file" accept="image/*" id="edit-photo-input" class="sr-only">
+          </label>
+          <button type="button" class="cell-btn destructive" id="edit-photo-remove" hidden>Remove Photo</button>
+        </div>
       </div>
 
       <div class="group">
         <button type="button" class="cell-btn destructive" id="edit-delete">Delete</button>
       </div>
     </form>
+  </dialog>
+
+  <!-- Search sheet -->
+  <dialog id="search" class="sheet search-sheet" aria-labelledby="search-title">
+    <form id="search-form" novalidate>
+      <div class="sheet-grab" aria-hidden="true"></div>
+      <header class="sheet-bar">
+        <span class="bar-btn" aria-hidden="true"></span>
+        <h2 id="search-title" tabindex="-1">Search</h2>
+        <button type="button" class="bar-btn strong" data-close>Done</button>
+      </header>
+      <div class="search-field">
+        <svg class="i" viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
+        <input id="search-input" type="search" placeholder="Search tasks, groceries, notes…" enterkeyhint="search" autocomplete="off" aria-label="Search this board">
+      </div>
+      <div id="search-results" aria-live="polite"></div>
+    </form>
+  </dialog>
+
+  <!-- Full-screen photo -->
+  <dialog id="viewer" class="viewer" aria-label="Photo">
+    <img id="viewer-img" alt="Note photo, full size">
+    <button type="button" class="viewer-close" data-close aria-label="Close photo">
+      <svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M18 6 6 18M6 6l12 12"/></svg>
+    </button>
   </dialog>
 
   <!-- Boards sheet: switch, create and join boards -->
@@ -155,7 +281,7 @@
         <button type="button" class="bar-btn strong" data-close>Done</button>
       </header>
 
-      <p class="group-header">On this iPhone</p>
+      <p class="group-header">On this device</p>
       <div class="group" id="board-list" role="list"></div>
       <p class="group-footer">Each board has its own lists and its own people. Tap one to open it.</p>
 
@@ -170,10 +296,10 @@
         </div>
         <button type="button" class="cell-btn" id="join-board-btn" aria-expanded="false" aria-controls="join-board-row">
           <svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg>
-          Join a Board
+          Join with an Invite Link
         </button>
         <div class="inline-form" id="join-board-row" hidden>
-          <input id="join-board-code" class="cell-input" autocapitalize="off" autocorrect="off" spellcheck="false" enterkeyhint="go" placeholder="Paste invite link or code" aria-label="Invite link or board code">
+          <input id="join-board-code" class="cell-input" autocapitalize="off" autocorrect="off" spellcheck="false" enterkeyhint="go" placeholder="Paste the invite link" aria-label="Invite link">
           <button type="button" class="btn primary" id="join-board-go">Join</button>
         </div>
       </div>
@@ -199,14 +325,23 @@
 
       <p class="group-header">People on this board</p>
       <div class="group" id="settings-members" role="list"></div>
+      <p class="group-footer" id="settings-members-note"></p>
 
       <div class="group">
         <button type="button" class="cell-btn" id="share-invite">
           <svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v13M7 8l5-5 5 5M5 13v6a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-6"/></svg>
           Invite People
         </button>
+        <button type="button" class="cell-btn" id="cancel-invites">
+          <svg class="i" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="m5.7 5.7 12.6 12.6"/></svg>
+          Stop Unused Invite Links
+        </button>
       </div>
-      <p class="group-footer">Send the link to anyone you want on this board. They open it in Safari, type their name, then tap Share and Add to Home Screen.</p>
+      <p class="group-footer" id="settings-invite-note">Invite links work for 7 days. Anyone who joins shows up in the list above.</p>
+
+      <p class="group-header" id="settings-keep-label">Keep ticked items</p>
+      <div id="settings-keep"></div>
+      <p class="group-footer">Ticked-off items older than this are cleared automatically, which keeps the board fast.</p>
 
       <label class="group-header" for="settings-name">Your name</label>
       <div class="group">
@@ -214,20 +349,29 @@
       </div>
       <p class="group-footer">Used on all your boards.</p>
 
-      <p class="group-header">Board code</p>
+      <p class="group-header">Backup</p>
       <div class="group">
-        <code id="settings-code" class="cell-value"></code>
+        <button type="button" class="cell-btn" id="export-board">
+          <svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v12M7 10l5 5 5-5M5 19h14"/></svg>
+          Export This Board
+        </button>
+        <label class="cell-btn file-btn">
+          <svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 21V9M7 14l5-5 5 5M5 5h14"/></svg>
+          Import a Backup
+          <input type="file" accept="application/json,.json" id="import-board" class="sr-only">
+        </label>
       </div>
+      <p class="group-footer">Saves every item on this board (photos not included) to a file you can keep in Files. Importing adds the items to this board.</p>
 
       <div class="group">
         <button type="button" class="cell-btn destructive centered" id="leave-board">Leave This Board</button>
       </div>
-      <p class="group-footer">Removes the board from this iPhone. Its lists stay saved for everyone else, and you can rejoin with an invite link.</p>
+      <p class="group-footer">Removes the board from this device. Its lists stay saved for everyone else, and you can rejoin with a new invite link.</p>
       <div class="confirm-leave" id="confirm-leave" hidden>
-        <p>Leave “<span id="confirm-leave-name"></span>”?</p>
+        <p id="confirm-text">Leave this board?</p>
         <div class="confirm-actions">
-          <button type="button" class="btn" id="confirm-leave-no">Keep</button>
-          <button type="button" class="btn destructive-fill" id="confirm-leave-yes">Leave</button>
+          <button type="button" class="btn" id="confirm-no">Keep</button>
+          <button type="button" class="btn destructive-fill" id="confirm-yes">Leave</button>
         </div>
       </div>
     </form>
@@ -235,6 +379,6 @@
 
   <div id="toast" class="toast" role="status" aria-live="polite"></div>
 
-  <script type="module" src="app.js"></script>
+  <script type="module" src="src/main.js"></script>
 </body>
 </html>

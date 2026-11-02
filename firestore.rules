@@ -1,19 +1,136 @@
 rules_version = '2';
+
+// Family Board security rules.
+//
+// Every phone signs in anonymously (Firebase Anonymous Auth), so each request
+// carries a private user id. A board can only be read or changed by its
+// members: people listed in families/{board}/members/{uid}.
+//
+// You become a member by:
+//   - creating the board (you are its owner), or
+//   - using an invite link, which holds a token that expires after 7 days, or
+//   - for boards made before this version: opening the old link within 14 days
+//     of the board being upgraded (then it locks).
+//
+// Text, names, photos and lists all have size limits so nobody can flood the
+// database.
 service cloud.firestore {
   match /databases/{database}/documents {
-    // Each board lives under families/{code}. The long random code acts as the
-    // shared secret: only people who know it can read or write. Listing all
-    // boards is not allowed, so codes can't be discovered.
-    match /families/{familyId} {
-      allow get, create, update: if familyId.size() >= 20;
 
-      match /items/{itemId} {
-        allow get, list, delete: if familyId.size() >= 20;
-        allow create, update: if familyId.size() >= 20
-          && request.resource.data.type in ['task', 'reminder', 'grocery', 'note']
-          && request.resource.data.text is string
-          && request.resource.data.text.size() > 0
-          && request.resource.data.text.size() <= 2000;
+    function signedIn() { return request.auth != null; }
+    function boardPath(b) { return /databases/$(database)/documents/families/$(b); }
+    function isMember(b) {
+      return signedIn() && exists(/databases/$(database)/documents/families/$(b)/members/$(request.auth.uid));
+    }
+    function text(v, max) { return v is string && v.size() > 0 && v.size() <= max; }
+    // Photos must be JPEG data the app made itself, never a link to another site
+    function jpeg(v, max) { return v is string && v.size() < max && v.matches('^data:image/jpeg;base64,[A-Za-z0-9+/=]+$'); }
+    function optionalNumber(d, key) { return !(key in d) || d[key] == null || d[key] is number; }
+    function optionalId(d, key) { return !(key in d) || d[key] == null || (d[key] is string && d[key].size() <= 128); }
+
+    // Boards made by older versions have no owner yet: anyone with the old
+    // link may join until it is upgraded, and for 14 days after that.
+    function legacyOpen(b) {
+      let board = get(boardPath(b)).data;
+      return board.get('ownerId', null) == null
+          || request.time < board.get('legacyUntil', timestamp.value(0));
+    }
+    function validInvite(b, token) {
+      let path = /databases/$(database)/documents/families/$(b)/invites/$(token);
+      return token is string && token.size() >= 16 && exists(path)
+          && get(path).data.expiresAt > request.time;
+    }
+
+    match /families/{b} {
+      allow get: if isMember(b);
+
+      // Creating a board: you must be its owner, and the id must be long and random
+      allow create: if signedIn() && b.size() >= 20
+        && request.resource.data.keys().hasOnly(['name', 'ownerId', 'createdAt', 'schema'])
+        && request.resource.data.ownerId == request.auth.uid
+        && text(request.resource.data.name, 60);
+
+      allow update: if isMember(b) && (
+        // Renaming, and how long ticked items are kept (0 = forever)
+        (request.resource.data.diff(resource.data).affectedKeys().hasOnly(['name', 'schema', 'keepDays'])
+          && text(request.resource.data.name, 60)
+          && (!('keepDays' in request.resource.data) || request.resource.data.keepDays in [0, 7, 30, 90]))
+        // Upgrading a board from an older version: the first member claims it
+        // and the old link keeps working for at most 15 more days
+        || (resource.data.get('ownerId', null) == null
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['ownerId', 'legacyUntil', 'schema', 'name'])
+          && request.resource.data.ownerId == request.auth.uid
+          && request.resource.data.legacyUntil is timestamp
+          && request.resource.data.legacyUntil <= request.time + duration.value(15, 'd')
+          && text(request.resource.data.get('name', 'x'), 60))
+      );
+
+      match /members/{uid} {
+        allow read: if isMember(b);
+        allow create: if signedIn() && request.auth.uid == uid
+          && request.resource.data.keys().hasOnly(['name', 'joinedAt', 'invite'])
+          && text(request.resource.data.name, 40)
+          && (
+            // the creator, in the same write as the board itself
+            getAfter(boardPath(b)).data.get('ownerId', null) == uid
+            || validInvite(b, request.resource.data.get('invite', ''))
+            || legacyOpen(b)
+          );
+        // You can change your own name
+        allow update: if request.auth.uid == uid
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['name'])
+          && text(request.resource.data.name, 40);
+        // You can leave; the owner can remove people
+        allow delete: if signedIn()
+          && (request.auth.uid == uid || get(boardPath(b)).data.get('ownerId', null) == request.auth.uid);
+      }
+
+      match /invites/{token} {
+        allow list, delete: if isMember(b);
+        allow create: if isMember(b) && token.size() >= 16
+          && request.resource.data.keys().hasOnly(['by', 'createdAt', 'expiresAt'])
+          && request.resource.data.by == request.auth.uid
+          && request.resource.data.expiresAt is timestamp
+          && request.resource.data.expiresAt <= request.time + duration.value(8, 'd');
+      }
+
+      match /items/{id} {
+        function validItem() {
+          let d = request.resource.data;
+          return d.keys().hasOnly(['type', 'text', 'by', 'done', 'doneBy', 'doneAt', 'createdAt',
+                                   'due', 'for', 'repeat', 'qty', 'order', 'thumb', 'hasPhoto'])
+            && d.type in ['task', 'reminder', 'grocery', 'note']
+            && text(d.text, 2000)
+            && d.done is bool
+            && (!('repeat' in d) || d.repeat == null || d.repeat in ['daily', 'weekdays', 'weekly', 'monthly', 'yearly'])
+            && (!('qty' in d) || d.qty == null || (d.qty is int && d.qty > 0 && d.qty < 1000))
+            && (!('thumb' in d) || d.thumb == null || jpeg(d.thumb, 30000))
+            && (!('hasPhoto' in d) || d.hasPhoto is bool)
+            && optionalNumber(d, 'due') && optionalNumber(d, 'doneAt') && optionalNumber(d, 'order')
+            && optionalId(d, 'for') && optionalId(d, 'doneBy')
+            && d.by is string && d.by.size() <= 128;
+        }
+        allow read, delete: if isMember(b);
+        allow create: if isMember(b) && validItem() && request.resource.data.by == request.auth.uid;
+        // Anyone on the board can edit or tick an item, but not change who added it
+        allow update: if isMember(b) && validItem() && request.resource.data.by == resource.data.by;
+      }
+
+      // Full-size note photos, kept out of the item list so lists stay light
+      match /photos/{id} {
+        allow read, delete: if isMember(b);
+        allow create, update: if isMember(b)
+          && request.resource.data.keys().hasOnly(['data', 'by'])
+          && jpeg(request.resource.data.data, 900000)
+          && request.resource.data.by == request.auth.uid;
+      }
+
+      // "Often bought" grocery counts
+      match /meta/{doc} {
+        allow read: if isMember(b);
+        allow write: if isMember(b) && doc == 'groceries'
+          && request.resource.data.keys().hasOnly(['counts'])
+          && request.resource.data.counts.size() <= 300;
       }
     }
   }

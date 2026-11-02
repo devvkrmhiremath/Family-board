@@ -1,0 +1,49 @@
+# Checks every push and pull request: lint, dependency audit, offline file list,
+# security rules, end-to-end and responsive tests, and a Semgrep security scan.
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  schedule:
+    - cron: "17 6 * * 1" # weekly, to catch newly published vulnerabilities
+
+permissions:
+  contents: read
+
+jobs:
+  lint-and-audit:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 22, cache: npm }
+      - run: npm ci
+      - run: npm run lint
+      - run: npm run check:sw
+      - run: npm audit --audit-level=low
+
+  tests:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 22, cache: npm }
+      - uses: actions/setup-java@v4
+        with: { distribution: temurin, java-version: 21 }
+      - run: npm ci
+      - run: npx playwright install --with-deps chromium
+      - name: Serve the app
+        run: python3 -m http.server 8765 &
+      - run: npm run test:rules
+      - run: npm run test:e2e
+      - run: npm run test:load
+      - run: node tools/responsive.mjs
+
+  semgrep:
+    runs-on: ubuntu-latest
+    container: semgrep/semgrep
+    steps:
+      - uses: actions/checkout@v4
+      - run: semgrep scan --error --metrics=off --config p/javascript --config p/html --config p/secrets --exclude vendor --exclude node_modules
