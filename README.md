@@ -1,11 +1,12 @@
 # Family Board
 
-Shared **tasks, reminders, groceries and notes** for families and friends. Everyone on a board sees changes live.
+A shared **calendar, tasks, reminders, groceries and notes** for families and friends. Everyone on a board sees changes live.
 It's a web app that installs on iPhone and Android home screens like a native app. There's no app store and no build step.
 
 ## Features
 - **Boards for every group**: "Our Home" with your partner, "Parents", "Goa Trip". Each has its own lists and its own people.
 - **Live sync** between everyone's phones, and it **works offline** (changes sync when you're back online).
+- **Shared calendar**: events (timed or all-day, one-off or repeating) and **busy time** so everyone can see when someone's unavailable. Clashes are flagged, and any event (or all of them) can be added to your phone's own Calendar app as an `.ics` file
 - **Tasks** with due dates, repeats, and "who's doing it"
 - **Reminders** with one-tap times, snooze, and repeats (daily, weekdays, weekly, monthly, yearly)
 - **Groceries** sorted by store aisle, with quantities (`2 milk`, `eggs x3`), "often bought" suggestions and a basket progress bar

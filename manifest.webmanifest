@@ -2,7 +2,7 @@
   "id": "./",
   "name": "Family Board",
   "short_name": "Family",
-  "description": "Shared tasks, reminders, groceries and notes for families and friends.",
+  "description": "Shared calendar, tasks, reminders, groceries and notes for families and friends.",
   "lang": "en",
   "dir": "ltr",
   "start_url": "./",
@@ -21,6 +21,7 @@
   "shortcuts": [
     { "name": "Groceries", "short_name": "Groceries", "url": "./?view=grocery", "icons": [{ "src": "icons/icon-192.png", "sizes": "192x192" }] },
     { "name": "Tasks", "short_name": "Tasks", "url": "./?view=task", "icons": [{ "src": "icons/icon-192.png", "sizes": "192x192" }] },
+    { "name": "Calendar", "short_name": "Calendar", "url": "./?view=event", "icons": [{ "src": "icons/icon-192.png", "sizes": "192x192" }] },
     { "name": "Reminders", "short_name": "Reminders", "url": "./?view=reminder", "icons": [{ "src": "icons/icon-192.png", "sizes": "192x192" }] }
   ]
 }

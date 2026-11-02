@@ -11,6 +11,13 @@ export function ago(ms) {
 }
 
 const startOfDay = (d) => new Date(d.getFullYear(), d.getMonth(), d.getDate()).getTime();
+// Local midnight of the day `ms` falls on, and `n` days after it (DST-safe)
+export const dayStart = (ms) => startOfDay(new Date(ms));
+export function addDays(ms, n) {
+  const d = new Date(ms);
+  d.setDate(d.getDate() + n);
+  return d.getTime();
+}
 export const dayDiff = (ms) => Math.round((startOfDay(new Date(ms)) - startOfDay(new Date())) / DAY);
 
 export function fmtDue(ms) {
@@ -76,6 +83,13 @@ const STEPS = new Map([
   }],
   ["yearly", (d) => d.setFullYear(d.getFullYear() + 1)],
 ]);
+
+// One repeat step on from `ms` (calendar events show every occurrence)
+export function stepRepeat(ms, repeat) {
+  const d = new Date(ms);
+  (STEPS.get(repeat) ?? STEPS.get("daily"))(d);
+  return d.getTime();
+}
 
 // The next date for a repeating item, never in the past
 export function nextDue(from, repeat) {

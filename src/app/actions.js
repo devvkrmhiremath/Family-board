@@ -2,6 +2,7 @@
 import { typeInfo, VIEW_ORDER, LIMITS } from "../core/constants.js";
 import { store } from "../core/store.js";
 import { fmtDue, nextDue, DAY } from "../core/time.js";
+import { isPast, lastMoment } from "../core/calendar.js";
 import { parseQty, capitalise } from "../core/groceries.js";
 import { reduceMotion } from "../core/platform.js";
 import { qs } from "../ui/dom.js";
@@ -168,6 +169,30 @@ export function addItem(type, text, { due = null, repeat = "", who = "", photo =
   saved.catch(offlineNote);
   if (photo) state.api.savePhoto(id, photo.full).catch(() => toast("Couldn't upload the photo"));
   return id;
+}
+
+// Add a calendar event or a block of busy time
+export function addEvent({ text, start, end, allDay = false, busy: isBusy = false, people = [], repeat = "" }) {
+  const item = { type: "event", text: text.slice(0, LIMITS.text), done: false, due: start };
+  if (end != null && end >= start) item.end = end;
+  if (allDay) item.allDay = true;
+  if (isBusy) item.busy = true;
+  if (people.length) item.people = people.slice(0, LIMITS.people);
+  if (repeat) item.repeat = repeat;
+  const { id, saved } = state.api.add(item);
+  saved.catch(offlineNote);
+  return id;
+}
+
+// One-off events that are over get ticked off, so the board's "keep ticked
+// items" setting tidies them away like everything else
+export function tidyPastEvents() {
+  if (!state.api) return;
+  for (const item of state.items) {
+    if (!isPast(item) || state.pending.has(item.id)) continue;
+    forgetRow(item.id);
+    state.api.update(item.id, { done: true, doneAt: lastMoment(item) }).catch(() => { /* next time */ });
+  }
 }
 
 // Save a dragged item's new position

@@ -1,6 +1,6 @@
 // The add box at the top of each list. On Home it has a type switch so anything
 // can be added from one place.
-import { TYPES, typeInfo, LIMITS } from "../core/constants.js";
+import { TYPES, QUICK_TYPES, typeInfo, LIMITS } from "../core/constants.js";
 import { timePresets, toLocalInput, fromLocalInput } from "../core/time.js";
 import { capitalise } from "../core/groceries.js";
 import { preparePhoto } from "../core/photo.js";
@@ -13,6 +13,7 @@ import { state } from "../app/state.js";
 import { whoPicker } from "../app/people.js";
 import { addGroceries, addItem, addPulse } from "../app/actions.js";
 import { hooks } from "../app/hooks.js";
+import { eventComposer } from "./calendar.js";
 
 function rerender() {
   const y = scrollY;
@@ -77,11 +78,12 @@ function whenPicker(type, form) {
 }
 
 export function composer(type, onHome) {
+  if (type === "event") return eventComposer();
   const form = h("form", { class: "composer", novalidate: true });
 
   if (onHome) {
     form.append(segmented("What to add",
-      [...TYPES].map(([value, t]) => ({ value, label: t.short })),
+      QUICK_TYPES.map((value) => ({ value, label: TYPES.get(value).short })),
       type, (v) => { state.quickType = v; rerender(); }));
   }
 

@@ -15,6 +15,8 @@ function toBackupItem(x) {
     type: x.type, text: x.text, done: !!x.done, doneAt: x.doneAt || null, due: x.due || null,
     repeat: x.repeat || null, qty: x.qty || null, createdAt: x.createdAt,
     addedBy: nameOf(x.by), for: x.for ? nameOf(x.for) : null, hadPhoto: !!x.hasPhoto,
+    end: x.end || null, allDay: !!x.allDay, busy: !!x.busy,
+    people: Array.isArray(x.people) ? x.people.map(nameOf) : null,
   };
 }
 
@@ -26,6 +28,14 @@ export function fromBackupItem(x) {
   if (isTime(x.due)) item.due = x.due;
   if (REPEATS.has(x.repeat)) item.repeat = x.repeat;
   if (Number.isInteger(x.qty) && x.qty > 1 && x.qty <= LIMITS.qty) item.qty = x.qty;
+  if (item.type === "event") {
+    // People were saved by name and can't be matched to accounts, so an imported
+    // event is for everyone
+    if (!item.due) return null;
+    if (isTime(x.end) && x.end >= item.due) item.end = x.end;
+    if (x.allDay === true) item.allDay = true;
+    if (x.busy === true) item.busy = true;
+  }
   return item;
 }
 

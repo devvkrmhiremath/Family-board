@@ -37,6 +37,31 @@ export function whoValue(v) {
   return others().find((m) => m.name === v)?.uid || "";
 }
 
+// Calendar: who's going (any number of people; none picked = everyone)
+export function peoplePicker(current, onChange) {
+  const picked = new Set(current);
+  const toggle = (id) => {
+    if (picked.has(id)) picked.delete(id); else picked.add(id);
+    onChange([...picked]);
+  };
+  const chip = (label, pressed, run) => h("button", { type: "button", class: "chip-btn", "aria-pressed": String(pressed), onclick: run }, label);
+  return h("div", { class: "chips", role: "group", "aria-label": "Who's going" },
+    chip("Everyone", !picked.size, () => onChange([])),
+    state.uid && chip("Me", picked.has(state.uid), () => toggle(state.uid)),
+    others().map((m) => chip(m.name, picked.has(m.uid), () => toggle(m.uid))));
+}
+// Calendar: whose busy time this is (one person)
+export function busyPicker(current, onPick) {
+  const options = [{ value: state.uid || "", label: "Me" }, ...others().map((m) => ({ value: m.uid, label: m.name }))];
+  return options.length <= 4 ? segmented("Who's busy", options, current, onPick) : chipGroup("Who's busy", options, current, onPick);
+}
+// "Everyone", "You and Priya", "Priya"
+export function peopleLabel(ids) {
+  if (!ids.length) return "Everyone";
+  const names = ids.map((id) => (isMe(id) ? "You" : nameOf(id)));
+  return names.length > 1 ? `${names.slice(0, -1).join(", ")} and ${names.at(-1)}` : names[0];
+}
+
 export function whoPicker(current, onPick) {
   const options = whoOptions();
   return options.length <= 4

@@ -293,7 +293,7 @@ main { padding: 6px 16px calc(env(safe-area-inset-bottom) + 112px); }
 .add-btn svg.i { width: 20px; height: 20px; stroke-width: 2.4; }
 .composer-extra { border-top: .5px solid var(--line); margin: 0 -6px; padding: 10px 8px 4px; }
 /* Progressive disclosure: date and "who" options appear once there's text */
-.composer:not(.has-text) > .composer-extra { display: none; }
+.composer:not(.has-text):not(.open) > .composer-extra { display: none; }
 .composer.has-text > .composer-extra { animation: reveal 320ms var(--ease-out); }
 @keyframes reveal { from { opacity: 0; transform: translateY(-4px); } }
 .composer-extra .label { font-size: .8125rem; color: var(--muted); margin: 0 4px 8px; }
@@ -574,7 +574,7 @@ main { padding: 6px 16px calc(env(safe-area-inset-bottom) + 112px); }
 
 /* Home tiles: Reminders-style smart lists. Card, coloured circle, count, name. */
 .stat { --tile: var(--c-task); }
-.stat[data-type="reminder"] { --tile: var(--c-reminder); }
+.stat[data-type="reminder"], .stat[data-type="event"] { --tile: var(--c-reminder); }
 .stat[data-type="grocery"]  { --tile: var(--c-grocery); }
 .stat[data-type="note"]     { --tile: var(--c-note); }
 @media (prefers-color-scheme: dark) { .stat-icon { color: #000; } }
@@ -786,3 +786,101 @@ html, body { overflow-x: clip; }
 
 /* Breathing room between the add box and the first list */
 #content > .list:first-child, #content > .basket:first-child, #content > .notes:first-child { margin-top: 16px; }
+
+/* =====================================================================
+   Calendar
+   ===================================================================== */
+.view-switch { margin: 6px 0 4px; }
+
+/* Week strip, like the top of Calendar on iPhone */
+.cal-strip { background: var(--card); border-radius: var(--radius-lg); padding: 4px 6px 8px; margin: 10px 0 4px; touch-action: pan-y; }
+.cal-head { display: flex; align-items: center; gap: 2px; padding-left: 10px; }
+.cal-month { flex: 1; min-width: 0; font-size: 1.0625rem; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.cal-today { margin: 0 6px 0 0; font-size: 1rem; }
+.cal-head .icon-btn svg.i { width: 22px; height: 22px; stroke-width: 2; }
+.cal-days { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); }
+.cal-day {
+  border: 0; background: none; min-height: 64px; padding: 4px 0; min-width: 0;
+  display: flex; flex-direction: column; align-items: center; gap: 3px; border-radius: 12px; color: var(--ink);
+}
+.cal-dow { font-size: .6875rem; font-weight: 600; color: var(--muted); text-transform: uppercase; letter-spacing: .02em; }
+.cal-num {
+  width: 34px; height: 34px; border-radius: 50%; display: grid; place-items: center;
+  font-size: 1.0625rem; font-weight: 500; font-variant-numeric: tabular-nums;
+  transition: background-color var(--t-fast), color var(--t-fast);
+}
+.cal-day.today .cal-num { color: var(--tint); font-weight: 600; }
+.cal-day[aria-pressed="true"] .cal-num { background: var(--ink); color: var(--card); font-weight: 600; }
+.cal-day.today[aria-pressed="true"] .cal-num { background: var(--tint); color: var(--on-tint); }
+.cal-dot { width: 5px; height: 5px; border-radius: 50%; background: transparent; }
+.cal-dot.on { background: var(--faint); }
+.cal-day:active .cal-num { background: var(--press); }
+.cal-group { margin: 18px 16px 7px; font-size: .9375rem; font-weight: 600; color: var(--ink); }
+.cal-export { margin-top: 28px; }
+
+/* Event rows: time, a slim colour bar, then what and who */
+.event-row {
+  position: relative; display: flex; align-items: stretch; gap: 12px; width: 100%;
+  min-height: 56px; padding: 10px 16px 10px 14px; border: 0; background: var(--card);
+  text-align: left; color: var(--ink);
+}
+.event-row:active { background: var(--press); }
+.list > * + .event-row::before, .event-row + .swipe .item::before {
+  content: ""; position: absolute; top: 0; left: 14px; right: 0; border-top: .5px solid var(--line);
+}
+.event-time {
+  flex: 0 0 auto; width: 4.6em; display: flex; flex-direction: column; gap: 2px; padding-top: 1px;
+  font-size: .8125rem; font-variant-numeric: tabular-nums; text-align: right;
+}
+.event-time strong { font-weight: 600; }
+.event-time span { color: var(--muted); }
+.event-bar { flex: 0 0 auto; width: 3px; border-radius: 2px; background: var(--tint); }
+.event-body { flex: 1; min-width: 0; display: grid; gap: 2px; align-content: center; }
+.event-title { font-size: 1.0625rem; overflow-wrap: anywhere; }
+.event-row.busy .event-bar { background: repeating-linear-gradient(180deg, var(--gray) 0 4px, transparent 4px 7px); }
+.event-row.busy .event-title { color: var(--muted); }
+.event-row.is-done .event-title, .event-row.is-done .event-time { opacity: .6; }
+.clash { display: inline-flex; align-items: center; gap: 4px; color: var(--orange); font-weight: 600; }
+.clash svg.i { width: 1.05em; height: 1.05em; }
+
+/* Calendar add box */
+.event-when, .event-times { display: flex; align-items: center; gap: 8px; }
+.event-when input[type="date"] { flex: 1; min-width: 0; background: var(--fill); border-radius: 10px; }
+.event-times { margin-top: 8px; }
+.event-times input { flex: 1; min-width: 0; background: var(--fill); border-radius: 10px; }
+.event-times .label { margin: 0 2px; }
+.composer-extra .chips:not(.scroll) { margin-bottom: 2px; }
+
+/* Settings-style rows with a label and a control */
+.field-row { display: flex; align-items: center; gap: 12px; min-height: 48px; padding: 0 16px; }
+.field-row > span { flex: 0 0 auto; }
+.field-row .cell-input { flex: 1; min-width: 0; text-align: right; padding-right: 0; }
+.field-row .cell-input::-webkit-date-and-time-value { text-align: right; }
+
+/* iOS switch */
+.switch {
+  -webkit-appearance: none; appearance: none; position: relative; margin-left: auto;
+  width: 51px; min-width: 51px; height: 31px; min-height: 31px; padding: 0; border-radius: 999px;
+  background: var(--fill); cursor: pointer; transition: background-color var(--t-med);
+}
+.switch::after {
+  content: ""; position: absolute; top: 2px; left: 2px; width: 27px; height: 27px; border-radius: 50%;
+  background: #fff; box-shadow: 0 3px 8px rgba(0, 0, 0, .15), 0 3px 1px rgba(0, 0, 0, .06);
+  transition: transform var(--t-med) var(--ease-spring);
+}
+.switch:checked { background: var(--green); }
+.switch:checked::after { transform: translateX(20px); }
+.switch:focus-visible { outline: 3px solid var(--tint); outline-offset: 2px; }
+.edit-ics { margin-top: 24px; }
+.edit-block + .group { margin-top: 28px; }
+
+/* Narrow phones: the week strip runs edge to edge so each day stays a 44pt target */
+@media (max-width: 359px) {
+  .cal-strip { margin-inline: -10px; border-radius: 0; padding-inline: 0; }
+  .cal-head { padding-right: 4px; }
+}
+/* Galaxy Fold cover screen: seven 44pt days don't fit, so the strip scrolls */
+@media (max-width: 309px) {
+  .cal-days { grid-template-columns: repeat(7, 44px); overflow-x: auto; scrollbar-width: none; }
+  .cal-days::-webkit-scrollbar { display: none; }
+}
