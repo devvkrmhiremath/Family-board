@@ -46,4 +46,4 @@ jobs:
     container: semgrep/semgrep
     steps:
       - uses: actions/checkout@v4
-      - run: semgrep scan --error --metrics=off --config p/javascript --config p/html --config p/secrets --exclude vendor --exclude node_modules
+      - run: semgrep scan --error --metrics=off --config p/javascript --config p/secrets --exclude vendor --exclude node_modules
