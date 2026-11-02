@@ -30,7 +30,10 @@ function textField(type) {
     ? h("textarea", { ...attrs, rows: 2 })
     : h("input", { ...attrs, enterkeyhint: "done", list: type === "grocery" ? "grocery-history" : null });
   field.value = state.drafts.get(type) || "";
-  field.addEventListener("input", () => state.drafts.set(type, field.value));
+  field.addEventListener("input", () => {
+    state.drafts.set(type, field.value);
+    field.form?.classList.toggle("has-text", !!field.value.trim());
+  });
   return field;
 }
 
@@ -83,6 +86,8 @@ export function composer(type, onHome) {
   }
 
   const field = textField(type);
+  // Date and "who" options appear once there's something to add (progressive disclosure)
+  form.classList.toggle("has-text", !!field.value.trim());
   form.append(h("div", { class: "composer-row" }, field,
     type === "note" && photoPicker(),
     h("button", { class: "btn primary add-btn", type: "submit", "aria-label": `Add ${typeInfo(type).one}` }, icon("plus"))));
@@ -128,6 +133,7 @@ export function composer(type, onHome) {
     }
     field.value = "";
     state.drafts.set(type, "");
+    form.classList.remove("has-text");
     field.focus();
     haptic();
     addPulse(form);

@@ -4,7 +4,7 @@
 // time. When this file changes (bump VERSION), the new worker installs fresh files
 // and the page reloads into them on its own.
 // Keep SHELL in sync with the files on disk: `npm run check:sw` verifies it.
-const VERSION = "fb-v12";
+const VERSION = "fb-v13";
 const SHELL = [
   "./", "index.html", "styles.css", "config.js", "manifest.webmanifest",
   "icons/icon-192.png", "icons/icon-512.png", "icons/icon-maskable-512.png", "icons/apple-touch-icon.png",

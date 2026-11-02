@@ -2,7 +2,7 @@
 import { typeInfo } from "../core/constants.js";
 import { greeting } from "../core/time.js";
 import { qs, qsa, h } from "../ui/dom.js";
-import { rowPositions, slideRows, rollNumbers, setAurora, bump } from "../ui/motion.js";
+import { rowPositions, slideRows, rollNumbers, bump } from "../ui/motion.js";
 import { state, seen, prevCounts, motionState, openCount } from "./state.js";
 import { composer } from "../views/composer.js";
 import { listContent } from "../views/lists.js";
@@ -24,8 +24,7 @@ function updateChrome() {
   qs("#board-btn-name").textContent = state.boardName;
   qs("#view-title").textContent = title;
   qs("#nav-title").textContent = title;
-  document.documentElement.dataset.view = state.view; // drives the section colours
-  setAurora(state.view);
+  document.documentElement.dataset.view = state.view;
   for (const tab of qsa("#tabbar button")) {
     const view = tab.dataset.view;
     if (view === state.view) tab.setAttribute("aria-current", "page");

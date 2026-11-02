@@ -17,8 +17,7 @@ function stat(type, label) {
   return h("button", { class: "stat", "data-type": type, "aria-label": `${label}: ${count}`, onclick: () => go(type) },
     h("span", { class: "stat-icon" }, icon(typeInfo(type).icon)),
     h("b", { "data-count": count, "data-key": `stat-${type}`, "aria-hidden": "true" }, String(prevCounts.get(`stat-${type}`) ?? 0)),
-    h("span", { class: "stat-label", "aria-hidden": "true" }, label),
-    icon(typeInfo(type).icon, "i stat-mark"));
+    h("span", { class: "stat-label", "aria-hidden": "true" }, label));
 }
 const section = (title, action) => h("div", { class: "section-title" }, h("span", {}, title),
   action && h("button", { class: "link-btn", onclick: action.run }, action.label));

@@ -6,7 +6,7 @@ import { parseQty, capitalise } from "../core/groceries.js";
 import { reduceMotion } from "../core/platform.js";
 import { qs } from "../ui/dom.js";
 import { toast } from "../ui/toast.js";
-import { haptic, burst, celebrate, wait, slideIn } from "../ui/motion.js";
+import { haptic, wait, slideIn } from "../ui/motion.js";
 import { pushLayer, popLayer } from "../ui/history.js";
 import { state, openCount, itemsOf, orderOf } from "./state.js";
 import { hooks } from "./hooks.js";
@@ -48,12 +48,10 @@ export async function toggle(item, checkBtn) {
   haptic();
   if (done && wrap && !reduceMotion.matches) {
     busy.add(item.id);
-    // Fill the circle, pop a little confetti and strike the text; then the row
-    // slides down into Done while the rows below glide up
+    // Fill the circle and strike the text; then the row slides down into Done
+    // while the rows below glide up
     checkBtn.setAttribute("aria-pressed", "true");
     wrap.classList.add("completing");
-    const r = checkBtn.getBoundingClientRect();
-    burst(r.left + r.width / 2, r.top + r.height / 2, 10);
     await wait(380);
     busy.delete(item.id);
   }
@@ -79,7 +77,6 @@ export async function toggle(item, checkBtn) {
     },
   };
   if (lastOne) {
-    celebrate();
     toast(item.type === "grocery" ? "Shopping done! Everything's in the basket." : "All done. Nice teamwork!");
   } else if (nextId) {
     toast(`Done. Next one: ${fmtDue(nextDueAt)}`, undo);
@@ -188,8 +185,8 @@ export const forgetRow = (id) => forget(id);
 export const addPulse = (form) => {
   if (reduceMotion.matches) return;
   qs(".add-btn svg", form)?.animate(
-    [{ transform: "rotate(0) scale(1)" }, { transform: "rotate(90deg) scale(1.25)" }, { transform: "rotate(180deg) scale(1)" }],
-    { duration: 450, easing: "cubic-bezier(.3,1.4,.5,1)" });
+    [{ transform: "scale(1)" }, { transform: "scale(.82)" }, { transform: "scale(1)" }],
+    { duration: 260, easing: "cubic-bezier(.3,1.2,.5,1)" });
 };
 
 export const typeTitle = (type) => typeInfo(type)?.title ?? "";
