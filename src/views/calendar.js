@@ -3,7 +3,7 @@
 import { REPEATS, LIMITS } from "../core/constants.js";
 import { DAY, dayStart, addDays, dayDiff } from "../core/time.js";
 import {
-  HOUR, occurrences, onDay, clashes, peopleOf, weekStartOf,
+  HOUR, occurrences, onDay, clashes, peopleOf, weekStartOf, isPast, utcDay,
   dateValue, timeValue, fromDateTime,
 } from "../core/calendar.js";
 import { h } from "../ui/dom.js";
@@ -157,7 +157,7 @@ export function calendarContent() {
       out.push(h("p", { class: "cal-group" }, dayTitle(g.day)), h("div", { class: "list" }, g.rows.map((o) => row(o, { day: g.day }))));
     }
   }
-  const exportable = state.items.filter((i) => i.type === "event" && !i.done && !state.pending.has(i.id));
+  const exportable = state.items.filter((i) => i.type === "event" && !i.done && !isPast(i) && !state.pending.has(i.id));
   if (exportable.length) {
     out.push(h("div", { class: "group cal-export" },
       h("button", { type: "button", class: "cell-btn", onclick: () => exportEvents(exportable) }, icon("download"), "Add All to My Calendar")),
@@ -244,14 +244,17 @@ export function eventComposer() {
     if (!state.api) { toast("Still connecting, try again in a moment"); return; }
     let start;
     let end;
+    let shownOn;
     if (draft.allDay) {
-      start = fromDateTime(draft.date);
-      end = fromDateTime(draft.endDate || draft.date);
-      if (end == null || end < start) end = start;
+      shownOn = fromDateTime(draft.date);
+      const last = fromDateTime(draft.endDate || draft.date);
+      start = shownOn == null ? null : utcDay(shownOn);
+      end = last == null || last < shownOn ? start : utcDay(last);
     } else {
       start = fromDateTime(draft.date, draft.start);
       end = fromDateTime(draft.date, draft.end);
       if (end != null && start != null && end <= start) end += DAY; // runs past midnight
+      shownOn = start;
     }
     if (start == null) { toast("Pick a date first"); return; }
     addEvent({
@@ -264,7 +267,7 @@ export function eventComposer() {
     haptic();
     addPulse(form);
     // Jump to the day it was added to, so you can see it
-    const day = dayStart(start);
+    const day = dayStart(shownOn);
     state.calDay = day === today() ? null : day;
     state.eventDraft = { ...freshDraft(), kind: draft.kind, people: draft.people, busyWho: draft.busyWho };
     toast(busy ? "Busy time added" : `Added for ${dayTitle(day).toLowerCase().replace(/^(today|tomorrow|yesterday)$/, (m) => m)}`);

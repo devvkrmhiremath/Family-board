@@ -9,7 +9,7 @@ import { haptic } from "../ui/motion.js";
 import { openSheet, closeSheet } from "../ui/sheets.js";
 import { state } from "../app/state.js";
 import { nameOf, isMe, whoPicker, whoValue, peoplePicker, busyPicker } from "../app/people.js";
-import { peopleOf, dateValue, fromDateTime, lastMoment } from "../core/calendar.js";
+import { peopleOf, dateValue, fromDateTime, lastMoment, localSpan, utcDay } from "../core/calendar.js";
 import { exportEvents, busyTitle } from "../views/calendar.js";
 import { removeWithUndo, forgetRow } from "../app/actions.js";
 
@@ -40,12 +40,20 @@ function setAllDay(on, { start, end } = {}) {
   s.value = startMs == null ? "" : on ? dateValue(startMs) : toLocalInput(startMs);
   e.value = endMs == null ? "" : on ? dateValue(endMs) : toLocalInput(endMs);
 }
+// The sheet's start and end as they are stored: exact moments for timed events,
+// zone-free dates for all-day ones
 function eventTimes() {
   const allDay = qs("#edit-allday").checked;
   const read = (el) => (allDay ? fromDateTime(el.value) : fromLocalInput(el.value));
   const due = read(qs("#edit-start"));
   let end = read(qs("#edit-end"));
-  if (end == null || due == null || end < due) end = allDay ? due : due != null ? due + 36e5 : null;
+  if (due == null) return { due, end: null, allDay };
+  if (allDay) {
+    if (end == null || end < due) end = due;
+    return { due: utcDay(due), end: utcDay(end), allDay };
+  }
+  // A timed event always lasts a while: an hour unless the end is later
+  if (end == null || end <= due) end = due + 36e5;
   return { due, end, allDay };
 }
 
@@ -113,7 +121,8 @@ export function openEdit(item) {
     qs("#edit-allday").checked = false;
     qs("#edit-start").type = "datetime-local";
     qs("#edit-end").type = "datetime-local";
-    setAllDay(!!item.allDay, { start: item.due, end: item.allDay ? (item.end ?? item.due) : lastMoment(item) });
+    const span = localSpan(item);
+    setAllDay(!!item.allDay, { start: span.due, end: item.allDay ? (span.end ?? span.due) : lastMoment(item) });
     editPeople = peopleOf(item);
     renderPeople();
   }
@@ -199,8 +208,11 @@ export function initEditSheet() {
   qs("#edit-allday").addEventListener("change", (e) => setAllDay(e.target.checked));
   qs("#edit-start").addEventListener("change", () => {
     // Keep the end after the start
-    const { due, end } = eventTimes();
-    if (due != null && (end == null || end < due)) setAllDay(qs("#edit-allday").checked, { start: due, end: due + (qs("#edit-allday").checked ? 0 : 36e5) });
+    const allDay = qs("#edit-allday").checked;
+    const read = (el) => (allDay ? fromDateTime(el.value) : fromLocalInput(el.value));
+    const due = read(qs("#edit-start"));
+    const end = read(qs("#edit-end"));
+    if (due != null && (end == null || end < due || (!allDay && end === due))) setAllDay(allDay, { start: due, end: due + (allDay ? 0 : 36e5) });
   });
   qs("#edit-ics").addEventListener("click", () => {
     if (!editing) return;

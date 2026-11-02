@@ -2,7 +2,6 @@
 // iPhone, Android and desktop calendars can import events. Nothing leaves the
 // device except the file the person chooses to open.
 import { h } from "../ui/dom.js";
-import { addDays } from "../core/time.js";
 import { peopleOf } from "../core/calendar.js";
 
 const RRULES = new Map([
@@ -14,6 +13,7 @@ const RRULES = new Map([
 ]);
 const pad = (n) => String(n).padStart(2, "0");
 const utc = (ms) => new Date(ms).toISOString().replace(/[-:]/g, "").replace(/\.\d{3}/, "");
+const utcDate = (ms) => new Date(ms).toISOString().slice(0, 10).replace(/-/g, "");
 const localDate = (ms) => { const d = new Date(ms); return `${d.getFullYear()}${pad(d.getMonth() + 1)}${pad(d.getDate())}`; };
 const localTime = (ms) => { const d = new Date(ms); return `${localDate(ms)}T${pad(d.getHours())}${pad(d.getMinutes())}00`; };
 // Text values: escape \ ; , and line breaks; drop other control characters
@@ -28,7 +28,8 @@ function vevent(item, { nameOf, boardName }) {
   const title = item.busy ? `${people[0] || "Someone"}: ${item.text === "Busy" ? "Busy" : `Busy (${item.text})`}` : item.text;
   const lines = ["BEGIN:VEVENT", `UID:${item.id}@family-board`, `DTSTAMP:${utc(Date.now())}`, `SUMMARY:${esc(title)}`];
   if (item.allDay) {
-    lines.push(`DTSTART;VALUE=DATE:${localDate(item.due)}`, `DTEND;VALUE=DATE:${localDate(addDays(item.end ?? item.due, 1))}`);
+    // All-day dates are stored as UTC midnight; DTEND is the day after the last day
+    lines.push(`DTSTART;VALUE=DATE:${utcDate(item.due)}`, `DTEND;VALUE=DATE:${utcDate((item.end ?? item.due) + 864e5)}`);
   } else if (item.repeat) {
     // Floating local time keeps "every Monday 9:00" at 9:00 through clock changes
     lines.push(`DTSTART:${localTime(item.due)}`, `DTEND:${localTime(item.end ?? item.due + 36e5)}`);

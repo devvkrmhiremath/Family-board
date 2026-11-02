@@ -1,7 +1,7 @@
 // App lifecycle: keep times fresh, finish pending deletes when the app is left,
 // and install updates (service worker) without anyone closing the app twice.
 import { qs } from "../ui/dom.js";
-import { flushDeletes } from "../app/actions.js";
+import { flushDeletes, tidyPastEvents } from "../app/actions.js";
 import { hooks } from "../app/hooks.js";
 import { clearRowCache } from "../views/rows.js";
 
@@ -32,6 +32,7 @@ export function initLifecycle() {
     if (qs("#app").hidden) return;
     clearRowCache();
     hooks.render();
+    tidyPastEvents(); // events that ended while the app stayed open
   }, 60000);
   // iOS freezes a Home Screen app in the background and shows the frozen screen on
   // return; visibilitychange alone doesn't always fire there, so listen to all of these

@@ -1,15 +1,35 @@
 // Calendar maths: where events fall, repeats, all-day spans and clashes.
-// An event stores `due` (start) and optionally `end`. All-day events store local
-// midnight of their first and last day; `end` is that last day (inclusive).
+// An event stores `due` (start) and optionally `end`. Timed events are exact
+// moments, shown in each person's own time zone. All-day events are calendar
+// dates, stored as UTC midnight of their first and last day (`end` inclusive),
+// so a birthday is on the same date for family in India and in London.
 import { DAY, dayStart, addDays, stepRepeat } from "./time.js";
 
 export const HOUR = 36e5;
 
-// When an occurrence starting at `start` stops (exclusive)
+// A local date <-> the zone-free calendar date stored for all-day events
+export function utcDay(localMs) {
+  const d = new Date(localMs);
+  return Date.UTC(d.getFullYear(), d.getMonth(), d.getDate());
+}
+export function localDay(utcMs) {
+  const d = new Date(utcMs);
+  return new Date(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate()).getTime();
+}
+// An event's start and end on this device's clock
+export function localSpan(item) {
+  if (!item.allDay) return { due: item.due, end: item.end };
+  return { due: localDay(item.due), end: localDay(item.end ?? item.due) };
+}
+
+// When an occurrence starting at `start` (local) stops (exclusive)
 function endOf(item, start) {
-  const length = Math.max(0, (item.end ?? item.due) - item.due);
-  if (item.allDay) return addDays(dayStart(start + length), 1);
-  return item.end != null ? start + length : start + HOUR;
+  const { due, end } = localSpan(item);
+  if (item.allDay) {
+    const days = Math.round((dayStart(end ?? due) - dayStart(due)) / DAY);
+    return addDays(dayStart(start), days + 1);
+  }
+  return end != null ? start + Math.max(0, end - due) : start + HOUR;
 }
 
 // Every occurrence of the board's events that touches [from, to), soonest first
@@ -17,7 +37,7 @@ export function occurrences(items, from, to) {
   const out = [];
   for (const item of items) {
     if (item.type !== "event" || !Number.isFinite(item.due)) continue;
-    let start = item.due;
+    let start = localSpan(item).due;
     for (let guard = 0; guard < 4000 && start < to; guard++) {
       const end = endOf(item, start);
       if (end > from) out.push({ item, start, end, key: `${item.id}@${start}` });
@@ -57,9 +77,9 @@ export function clashes(occs) {
 
 // Past one-off events, so they can be ticked off and tidied like other items
 export function isPast(item, now = Date.now()) {
-  return item.type === "event" && !item.repeat && !item.done && endOf(item, item.due) < now - DAY;
+  return item.type === "event" && !item.repeat && !item.done && lastMoment(item) < now - DAY;
 }
-export const lastMoment = (item) => endOf(item, item.due);
+export const lastMoment = (item) => endOf(item, localSpan(item).due);
 
 // "YYYY-MM-DD" and "HH:MM" for native date and time inputs, in local time
 const pad = (n) => String(n).padStart(2, "0");
